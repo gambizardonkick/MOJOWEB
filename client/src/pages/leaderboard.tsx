@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { LeaderboardEntry, LeaderboardSettings } from "@shared/schema";
-import kickLogo from "@assets/image_1761502625743.png";
-
+import kickLogo from "./image_1761502625743.png";
 export default function Leaderboard() {
   const { data: settings, isLoading: settingsLoading } = useQuery<LeaderboardSettings>({
     queryKey: ["/api/leaderboard/settings"],
