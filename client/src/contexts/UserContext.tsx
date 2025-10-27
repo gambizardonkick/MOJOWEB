@@ -15,7 +15,10 @@ const UserContext = createContext<UserContextType>({
 });
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    // Initialize from localStorage immediately
+    return localStorage.getItem("sessionId");
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -25,12 +28,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("sessionId", urlSessionId);
       setSessionId(urlSessionId);
       window.history.replaceState({}, '', window.location.pathname);
-      return;
-    }
-    
-    let stored = localStorage.getItem("sessionId");
-    if (stored) {
-      setSessionId(stored);
     }
   }, []);
 
