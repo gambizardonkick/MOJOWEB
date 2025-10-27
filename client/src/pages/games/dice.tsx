@@ -183,48 +183,17 @@ function DiceGamePage() {
                   onChange={(e) => setTargetNumber(e.target.value)}
                   min="1"
                   max="99"
-                  className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-red-600"
+                  className="w-full h-2 rounded-lg appearance-none cursor-pointer dice-slider"
+                  style={{
+                    background: direction === "under" 
+                      ? `linear-gradient(to right, #dc2626 0%, #dc2626 ${target}%, #3f3f46 ${target}%, #3f3f46 100%)`
+                      : `linear-gradient(to right, #3f3f46 0%, #3f3f46 ${target}%, #dc2626 ${target}%, #dc2626 100%)`
+                  }}
                   data-testid="input-target-number"
                 />
                 <div className="flex justify-between text-xs text-zinc-500 mt-1">
                   <span>0</span>
                   <span>100</span>
-                </div>
-                
-                <div className="mt-4 relative h-8 bg-zinc-800 rounded-lg overflow-hidden">
-                  <div className="absolute inset-0 flex">
-                    {direction === "under" ? (
-                      <>
-                        <div 
-                          className="bg-red-600/80 flex items-center justify-center text-white text-xs font-bold transition-all duration-300"
-                          style={{ width: `${target}%` }}
-                        >
-                          {target > 15 && `0-${target}`}
-                        </div>
-                        <div 
-                          className="bg-zinc-700/50 flex items-center justify-center text-zinc-400 text-xs transition-all duration-300"
-                          style={{ width: `${100 - target}%` }}
-                        >
-                          {(100 - target) > 15 && `${target}-100`}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div 
-                          className="bg-zinc-700/50 flex items-center justify-center text-zinc-400 text-xs transition-all duration-300"
-                          style={{ width: `${target}%` }}
-                        >
-                          {target > 15 && `0-${target}`}
-                        </div>
-                        <div 
-                          className="bg-green-600/80 flex items-center justify-center text-white text-xs font-bold transition-all duration-300"
-                          style={{ width: `${100 - target}%` }}
-                        >
-                          {(100 - target) > 15 && `${target}-100`}
-                        </div>
-                      </>
-                    )}
-                  </div>
                 </div>
               </div>
               
