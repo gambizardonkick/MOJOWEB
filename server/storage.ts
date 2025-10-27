@@ -17,6 +17,7 @@ import {
   type InsertShopItem,
   type Redemption,
   type InsertRedemption,
+  type ActiveMinesGame,
 } from "@shared/schema";
 import { getDb } from "./firebase";
 import { getKickletService } from "./kicklet";
@@ -67,6 +68,11 @@ export interface IStorage {
 
   getGameHistory(userId: string): Promise<GameHistory[]>;
   createGameHistory(history: InsertGameHistory): Promise<GameHistory>;
+
+  getActiveMinesGame(userId: string): Promise<ActiveMinesGame | undefined>;
+  createActiveMinesGame(game: Omit<ActiveMinesGame, 'id' | 'createdAt'>): Promise<ActiveMinesGame>;
+  updateActiveMinesGame(gameId: string, data: Partial<ActiveMinesGame>): Promise<ActiveMinesGame>;
+  deleteActiveMinesGame(gameId: string): Promise<void>;
 
   getShopItems(): Promise<ShopItem[]>;
   getShopItem(id: string): Promise<ShopItem | undefined>;
@@ -578,6 +584,40 @@ export class FirebaseStorage implements IStorage {
     });
     const snapshot = await newRef.get();
     return { id: snapshot.key!, ...snapshot.val() } as GameHistory;
+  }
+
+  async getActiveMinesGame(userId: string): Promise<ActiveMinesGame | undefined> {
+    const snapshot = await this.db.ref('activeMinesGames').get();
+    if (!snapshot.exists()) return undefined;
+    
+    let game: ActiveMinesGame | undefined;
+    snapshot.forEach((child) => {
+      const data = child.val();
+      if (data.userId === userId && data.gameActive) {
+        game = { id: child.key!, ...data } as ActiveMinesGame;
+      }
+    });
+    return game;
+  }
+
+  async createActiveMinesGame(game: Omit<ActiveMinesGame, 'id' | 'createdAt'>): Promise<ActiveMinesGame> {
+    const newRef = this.db.ref('activeMinesGames').push();
+    await newRef.set({
+      ...game,
+      createdAt: new Date().toISOString(),
+    });
+    const snapshot = await newRef.get();
+    return { id: snapshot.key!, ...snapshot.val() } as ActiveMinesGame;
+  }
+
+  async updateActiveMinesGame(gameId: string, data: Partial<ActiveMinesGame>): Promise<ActiveMinesGame> {
+    await this.db.ref(`activeMinesGames/${gameId}`).update(data);
+    const snapshot = await this.db.ref(`activeMinesGames/${gameId}`).get();
+    return { id: snapshot.key!, ...snapshot.val() } as ActiveMinesGame;
+  }
+
+  async deleteActiveMinesGame(gameId: string): Promise<void> {
+    await this.db.ref(`activeMinesGames/${gameId}`).remove();
   }
 
   async getShopItems(): Promise<ShopItem[]> {
