@@ -64,7 +64,12 @@ const gameMenuItems = [
   {
     title: "Limbo",
     url: "/games/limbo",
-    icon: Trophy,
+    icon: TrendingUp,
+  },
+  {
+    title: "Mines",
+    url: "/games/mines",
+    icon: Bomb,
   },
 ];
 
