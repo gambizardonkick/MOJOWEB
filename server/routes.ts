@@ -775,13 +775,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ hasActiveGame: false });
       }
       
+      // Encode mine positions for client
+      const salt = randomBytes(16).toString('hex');
+      const mineData = JSON.stringify({ mines: game.minePositions, salt });
+      const encodedMines = Buffer.from(mineData).toString('base64');
+      
       res.json({
         hasActiveGame: true,
         gameId: game.id,
         betAmount: game.betAmount,
         minesCount: game.minesCount,
-        revealedTiles: game.revealedTiles,
-        currentMultiplier: game.currentMultiplier,
+        encodedMines,
+        revealedTiles: game.revealedTiles || [],
       });
     } catch (error) {
       console.error("Get active mines game error:", error);
@@ -844,13 +849,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         gameActive: true,
       });
       
-      const updatedUser = await storage.getUser(userId);
+      // Encode mine positions for client (obfuscated)
+      const salt = randomBytes(16).toString('hex');
+      const mineData = JSON.stringify({ mines: minePositions, salt });
+      const encodedMines = Buffer.from(mineData).toString('base64');
       
       res.json({
         gameId: game.id,
-        revealedTiles: [],
-        currentMultiplier: 0,
-        newBalance: updatedUser?.points || 0,
+        encodedMines,
       });
     } catch (error) {
       console.error("Mines start game error:", error);
@@ -878,6 +884,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "No active game found" });
       }
       
+      // Safety check: ensure game has valid data structure
+      if (!game.revealedTiles || !game.minePositions) {
+        await storage.deleteActiveMinesGame(game.id);
+        return res.status(400).json({ error: "Game data corrupted. Please start a new game." });
+      }
+      
       if (game.revealedTiles.includes(position)) {
         return res.status(400).json({ error: "Tile already revealed" });
       }
@@ -903,8 +915,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }),
         });
         
-        const updatedUser = await storage.getUser(userId);
-        
         return res.json({
           hitMine: true,
           gameOver: true,
@@ -913,7 +923,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           revealedTiles: [...game.revealedTiles, position],
           currentMultiplier: 0,
           payout: 0,
-          newBalance: updatedUser?.points || 0,
         });
       }
       
@@ -957,17 +966,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }),
         });
         
-        const updatedUser = await storage.getUser(userId);
-        
         return res.json({
           hitMine: false,
           gameOver: true,
           position,
+          minePositions: game.minePositions,
           revealedTiles: updatedRevealedTiles,
           currentMultiplier: multiplier,
           payout,
           autoCashout: true,
-          newBalance: updatedUser?.points || 0,
         });
       }
       
@@ -984,11 +991,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Game Logic - Mines: Cashout
-  app.post("/api/games/mines/cashout", async (req, res) => {
+  // Game Logic - Mines: End Game (hit mine or complete board)
+  app.post("/api/games/mines/end", async (req, res) => {
     try {
       const schema = z.object({
         userId: z.string(),
+        revealedTiles: z.array(z.number().min(0).max(24)),
+        hitMine: z.boolean(),
       });
       
       const validation = schema.safeParse(req.body);
@@ -996,18 +1005,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: validation.error.errors[0].message });
       }
       
-      const { userId } = validation.data;
+      const { userId, revealedTiles, hitMine } = validation.data;
       
       const game = await storage.getActiveMinesGame(userId);
       if (!game) {
         return res.status(404).json({ error: "No active game found" });
       }
       
-      if (game.revealedTiles.length === 0) {
+      // Validate revealed tiles don't include mines (unless hitMine is true)
+      if (!hitMine) {
+        const hasMine = revealedTiles.some(tile => game.minePositions.includes(tile));
+        if (hasMine) {
+          return res.status(400).json({ error: "Invalid game state: revealed tiles contain mines" });
+        }
+      }
+      
+      await storage.deleteActiveMinesGame(game.id);
+      
+      if (hitMine) {
+        await storage.createGameHistory({
+          userId,
+          gameName: 'mines',
+          betAmount: game.betAmount,
+          payout: 0,
+          result: 'loss',
+          gameData: JSON.stringify({
+            minesCount: game.minesCount,
+            revealedTiles: revealedTiles.length,
+            hitMine: true,
+          }),
+        });
+        
+        const updatedUser = await storage.getUser(userId);
+        
+        return res.json({
+          success: true,
+          payout: 0,
+          minePositions: game.minePositions,
+          newBalance: updatedUser?.points || 0,
+        });
+      } else {
+        // Completed board - calculate payout
+        const totalTiles = 25;
+        const minesCount = game.minesCount;
+        let multiplier = 0.99;
+        
+        for (let i = 0; i < revealedTiles.length; i++) {
+          const safeTilesRemaining = totalTiles - minesCount - i;
+          const tilesRemaining = totalTiles - i;
+          multiplier *= (tilesRemaining / safeTilesRemaining);
+        }
+        
+        const payout = Math.floor(game.betAmount * multiplier);
+        await storage.addPoints(userId, payout);
+        
+        await storage.createGameHistory({
+          userId,
+          gameName: 'mines',
+          betAmount: game.betAmount,
+          payout,
+          result: 'win',
+          gameData: JSON.stringify({
+            minesCount: game.minesCount,
+            revealedTiles: revealedTiles.length,
+            autoCashout: true,
+            multiplier,
+          }),
+        });
+        
+        const updatedUser = await storage.getUser(userId);
+        
+        return res.json({
+          success: true,
+          payout,
+          multiplier,
+          minePositions: game.minePositions,
+          newBalance: updatedUser?.points || 0,
+        });
+      }
+    } catch (error) {
+      console.error("Mines end game error:", error);
+      res.status(500).json({ error: "Failed to end game" });
+    }
+  });
+
+  // Game Logic - Mines: Cashout
+  app.post("/api/games/mines/cashout", async (req, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string(),
+        revealedTiles: z.array(z.number().min(0).max(24)),
+      });
+      
+      const validation = schema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error.errors[0].message });
+      }
+      
+      const { userId, revealedTiles } = validation.data;
+      
+      const game = await storage.getActiveMinesGame(userId);
+      if (!game) {
+        return res.status(404).json({ error: "No active game found" });
+      }
+      
+      if (revealedTiles.length === 0) {
         return res.status(400).json({ error: "Cannot cashout without revealing any tiles" });
       }
       
-      const payout = Math.floor(game.betAmount * game.currentMultiplier);
+      // Validate revealed tiles don't include mines
+      const hasMine = revealedTiles.some(tile => game.minePositions.includes(tile));
+      if (hasMine) {
+        return res.status(400).json({ error: "Invalid game state: revealed tiles contain mines" });
+      }
+      
+      // Calculate multiplier
+      const totalTiles = 25;
+      const minesCount = game.minesCount;
+      let multiplier = 0.99;
+      
+      for (let i = 0; i < revealedTiles.length; i++) {
+        const safeTilesRemaining = totalTiles - minesCount - i;
+        const tilesRemaining = totalTiles - i;
+        multiplier *= (tilesRemaining / safeTilesRemaining);
+      }
+      
+      const payout = Math.floor(game.betAmount * multiplier);
       await storage.addPoints(userId, payout);
       await storage.deleteActiveMinesGame(game.id);
       
@@ -1019,19 +1142,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         result: 'win',
         gameData: JSON.stringify({
           minesCount: game.minesCount,
-          revealedTiles: game.revealedTiles.length,
-          multiplier: game.currentMultiplier,
+          revealedTiles: revealedTiles.length,
+          multiplier,
           cashout: true,
         }),
       });
       
-      const updatedUser = await storage.getUser(userId);
-      
       res.json({
         success: true,
         payout,
-        multiplier: game.currentMultiplier,
-        newBalance: updatedUser?.points || 0,
+        multiplier,
         minePositions: game.minePositions,
       });
     } catch (error) {
