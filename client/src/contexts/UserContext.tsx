@@ -31,19 +31,25 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const { data: user, isLoading } = useQuery<User>({
+  const { data: user, isLoading, isError } = useQuery<User>({
     queryKey: ["/api/users/me", sessionId],
     enabled: !!sessionId,
     refetchInterval: 5000,
+    retry: 1,
     queryFn: async () => {
       const res = await fetch(`/api/users/me?sessionId=${sessionId}`);
-      if (!res.ok) throw new Error("Failed to fetch user");
+      if (!res.ok) {
+        // Clear invalid session
+        localStorage.removeItem("sessionId");
+        setSessionId(null);
+        throw new Error("Failed to fetch user");
+      }
       return res.json();
     },
   });
 
   return (
-    <UserContext.Provider value={{ user: user || null, sessionId, isLoading }}>
+    <UserContext.Provider value={{ user: user || null, sessionId: isError ? null : sessionId, isLoading }}>
       {children}
     </UserContext.Provider>
   );
