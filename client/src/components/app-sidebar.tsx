@@ -1,4 +1,4 @@
-import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag } from "lucide-react";
+import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag, Bomb, Spade, TrendingUp } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
