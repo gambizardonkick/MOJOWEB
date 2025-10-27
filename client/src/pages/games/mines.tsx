@@ -26,6 +26,12 @@ function MinesGamePage() {
   // Check for active game on mount
   const { data: activeGameData } = useQuery<any>({
     queryKey: ["/api/games/mines/active", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const response = await fetch(`/api/games/mines/active/${user.id}`);
+      if (!response.ok) throw new Error('Failed to fetch active game');
+      return response.json();
+    },
     enabled: !!user?.id,
   });
 
