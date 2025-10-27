@@ -346,23 +346,6 @@ export class FirebaseStorage implements IStorage {
     const snapshot = await this.db.ref(`users/${id}`).get();
     if (!snapshot.exists()) return undefined;
     const user = { id: snapshot.key!, ...snapshot.val() } as User;
-    
-    if (user.kickUsername && user.kickUserId) {
-      try {
-        const channelId = process.env.KICK_CHANNEL_ID;
-        if (!channelId) {
-          console.error('KICK_CHANNEL_ID environment variable is not set');
-        } else {
-          const kicklet = getKickletService();
-          const kickletPoints = await kicklet.getViewerPoints(channelId, user.kickUsername);
-          user.points = kickletPoints;
-          await this.db.ref(`users/${id}`).update({ points: kickletPoints });
-        }
-      } catch (error) {
-        console.error(`Error fetching Kicklet points for user ${id}:`, error);
-      }
-    }
-    
     return user;
   }
 
@@ -371,25 +354,7 @@ export class FirebaseStorage implements IStorage {
     if (!mappingSnapshot.exists()) return undefined;
     
     const userId = mappingSnapshot.val();
-    const user = await this.getUser(userId);
-    
-    if (user && user.kickUsername && user.kickUserId) {
-      try {
-        const channelId = process.env.KICK_CHANNEL_ID;
-        if (!channelId) {
-          console.error('KICK_CHANNEL_ID environment variable is not set');
-        } else {
-          const kicklet = getKickletService();
-          const kickletPoints = await kicklet.getViewerPoints(channelId, user.kickUsername);
-          user.points = kickletPoints;
-          await this.db.ref(`users/${userId}`).update({ points: kickletPoints });
-        }
-      } catch (error) {
-        console.error(`Error fetching Kicklet points for session ${sessionId}:`, error);
-      }
-    }
-    
-    return user;
+    return await this.getUser(userId);
   }
 
   async getUserByDiscordId(discordUserId: string): Promise<User | undefined> {
@@ -594,7 +559,12 @@ export class FirebaseStorage implements IStorage {
     snapshot.forEach((child) => {
       const data = child.val();
       if (data.userId === userId && data.gameActive) {
-        game = { id: child.key!, ...data } as ActiveMinesGame;
+        game = {
+          id: child.key!,
+          ...data,
+          minePositions: typeof data.minePositions === 'string' ? JSON.parse(data.minePositions) : (data.minePositions || []),
+          revealedTiles: typeof data.revealedTiles === 'string' ? JSON.parse(data.revealedTiles) : (data.revealedTiles || []),
+        } as ActiveMinesGame;
       }
     });
     return game;
@@ -602,18 +572,40 @@ export class FirebaseStorage implements IStorage {
 
   async createActiveMinesGame(game: Omit<ActiveMinesGame, 'id' | 'createdAt'>): Promise<ActiveMinesGame> {
     const newRef = this.db.ref('activeMinesGames').push();
-    await newRef.set({
+    const gameData = {
       ...game,
+      minePositions: JSON.stringify(game.minePositions),
+      revealedTiles: JSON.stringify(game.revealedTiles),
       createdAt: new Date().toISOString(),
-    });
+    };
+    await newRef.set(gameData);
     const snapshot = await newRef.get();
-    return { id: snapshot.key!, ...snapshot.val() } as ActiveMinesGame;
+    const data = snapshot.val();
+    return {
+      id: snapshot.key!,
+      ...data,
+      minePositions: JSON.parse(data.minePositions),
+      revealedTiles: JSON.parse(data.revealedTiles),
+    } as ActiveMinesGame;
   }
 
   async updateActiveMinesGame(gameId: string, data: Partial<ActiveMinesGame>): Promise<ActiveMinesGame> {
-    await this.db.ref(`activeMinesGames/${gameId}`).update(data);
+    const updateData: any = { ...data };
+    if (data.revealedTiles) {
+      updateData.revealedTiles = JSON.stringify(data.revealedTiles);
+    }
+    if (data.minePositions) {
+      updateData.minePositions = JSON.stringify(data.minePositions);
+    }
+    await this.db.ref(`activeMinesGames/${gameId}`).update(updateData);
     const snapshot = await this.db.ref(`activeMinesGames/${gameId}`).get();
-    return { id: snapshot.key!, ...snapshot.val() } as ActiveMinesGame;
+    const savedData = snapshot.val();
+    return {
+      id: snapshot.key!,
+      ...savedData,
+      minePositions: typeof savedData.minePositions === 'string' ? JSON.parse(savedData.minePositions) : (savedData.minePositions || []),
+      revealedTiles: typeof savedData.revealedTiles === 'string' ? JSON.parse(savedData.revealedTiles) : (savedData.revealedTiles || []),
+    } as ActiveMinesGame;
   }
 
   async deleteActiveMinesGame(gameId: string): Promise<void> {
