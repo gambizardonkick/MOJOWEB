@@ -10,6 +10,7 @@ import { TrendingUp, Coins } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import type { GameHistory } from "@shared/schema";
+import { HOUSE_EDGE } from "@shared/constants";
 
 function LimboGamePage() {
   const { toast } = useToast();
@@ -23,8 +24,8 @@ function LimboGamePage() {
     enabled: !!user?.id,
   });
   
-  const winChance = (1 / parseFloat(targetMultiplier || "2")) * 100;
-  const potentialPayout = Math.floor(parseInt(betAmount || "0") * parseFloat(targetMultiplier || "2"));
+  const winChance = ((1 / parseFloat(targetMultiplier || "2")) * (1 - HOUSE_EDGE)) * 100;
+  const potentialPayout = Math.floor(parseInt(betAmount || "0") * parseFloat(targetMultiplier || "2") * (1 - HOUSE_EDGE));
 
   const playMutation = useMutation({
     mutationFn: async () => {
