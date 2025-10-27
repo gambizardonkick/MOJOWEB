@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Bomb, Gem, Coins, TrendingUp } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
@@ -13,7 +12,6 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 type GameState = 'betting' | 'playing' | 'gameover';
 
 function MinesGamePage() {
-  const { toast } = useToast();
   const { user } = useUser();
   const [betAmount, setBetAmount] = useState("100");
   const [minesCount, setMinesCount] = useState("3");
@@ -22,6 +20,8 @@ function MinesGamePage() {
   const [minePositions, setMinePositions] = useState<number[]>([]);
   const [currentMultiplier, setCurrentMultiplier] = useState(0);
   const [gameId, setGameId] = useState<string | null>(null);
+  const [preventRestore, setPreventRestore] = useState(false);
+  const [pendingTile, setPendingTile] = useState<number | null>(null);
 
   // Check for active game on mount
   const { data: activeGameData } = useQuery<any>({
@@ -32,20 +32,45 @@ function MinesGamePage() {
       if (!response.ok) throw new Error('Failed to fetch active game');
       return response.json();
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && gameState === 'betting',
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    staleTime: Infinity,
   });
 
-  // Restore active game state
-  useEffect(() => {
-    if (activeGameData?.hasActiveGame) {
-      setGameId(activeGameData.gameId);
-      setBetAmount(String(activeGameData.betAmount));
-      setMinesCount(String(activeGameData.minesCount));
-      setRevealedTiles(activeGameData.revealedTiles);
-      setCurrentMultiplier(activeGameData.currentMultiplier);
-      setGameState('playing');
+  // Calculate multiplier client-side
+  const calculateMultiplier = (revealedCount: number, totalMines: number): number => {
+    const totalTiles = 25;
+    let multiplier = 0.99;
+    
+    for (let i = 0; i < revealedCount; i++) {
+      const safeTilesRemaining = totalTiles - totalMines - i;
+      const tilesRemaining = totalTiles - i;
+      multiplier *= (tilesRemaining / safeTilesRemaining);
     }
-  }, [activeGameData]);
+    
+    return multiplier;
+  };
+
+  // Restore active game state - only restore if we're in betting state and not prevented
+  useEffect(() => {
+    if (activeGameData?.hasActiveGame && gameState === 'betting' && !preventRestore) {
+      setGameId(activeGameData.gameId);
+      setBetAmount(String(activeGameData.betAmount || 100));
+      setMinesCount(String(activeGameData.minesCount || 3));
+      const restored = activeGameData.revealedTiles || [];
+      setRevealedTiles(restored);
+      const restoredMultiplier = calculateMultiplier(restored.length, activeGameData.minesCount || 3);
+      setCurrentMultiplier(restoredMultiplier);
+      setGameState('playing');
+    } else if (!activeGameData?.hasActiveGame && gameState === 'playing' && !gameId) {
+      // No active game but we're in playing state without a gameId - reset to betting
+      setGameState('betting');
+      setRevealedTiles([]);
+      setMinePositions([]);
+      setCurrentMultiplier(0);
+    }
+  }, [activeGameData, gameState, preventRestore]);
 
   const totalTiles = 25;
   const mines = parseInt(minesCount || "3");
@@ -53,11 +78,12 @@ function MinesGamePage() {
 
   const startGameMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/games/mines/start", {
+      const response = await apiRequest("POST", "/api/games/mines/start", {
         userId: user?.id,
         betAmount: parseInt(betAmount),
         minesCount: parseInt(minesCount),
-      }) as Promise<any>;
+      });
+      return response.json();
     },
     onSuccess: (data: any) => {
       setGameId(data.gameId);
@@ -65,83 +91,63 @@ function MinesGamePage() {
       setRevealedTiles([]);
       setMinePositions([]);
       setCurrentMultiplier(0);
+      setPreventRestore(false);
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-      toast({
-        title: "Game Started!",
-        description: "Click tiles to reveal them. Avoid the mines!",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to start game",
-        variant: "destructive",
-      });
+      queryClient.invalidateQueries({ queryKey: ["/api/games/mines/active", user?.id] });
     },
   });
 
   const revealTileMutation = useMutation({
     mutationFn: async (position: number) => {
-      return apiRequest("POST", "/api/games/mines/reveal", {
+      const response = await apiRequest("POST", "/api/games/mines/reveal", {
         userId: user?.id,
         position,
-      }) as Promise<any>;
+      });
+      return response.json();
     },
     onSuccess: (data: any) => {
-      setRevealedTiles(data.revealedTiles);
-      setCurrentMultiplier(data.currentMultiplier);
-
+      setPendingTile(null);
+      
       if (data.hitMine) {
-        setGameState('gameover');
-        setMinePositions(data.minePositions);
-        queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/games/mines/active", user?.id] });
-        toast({
-          title: "💥 Hit a Mine!",
-          description: "Better luck next time!",
-          variant: "destructive",
-        });
-      } else if (data.autoCashout) {
+        // Hit a mine - game over
+        setMinePositions(data.minePositions || []);
+        setRevealedTiles(data.revealedTiles || []);
+        setCurrentMultiplier(0);
         setGameState('gameover');
         queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/games/mines/active", user?.id] });
-        toast({
-          title: "🎉 All Safe Tiles Cleared!",
-          description: `You won ${data.payout.toLocaleString()} points!`,
-        });
+      } else if (data.gameOver) {
+        // All safe tiles revealed - auto cashout
+        setMinePositions(data.minePositions || []);
+        setRevealedTiles(data.revealedTiles || []);
+        setCurrentMultiplier(data.currentMultiplier || 0);
+        setGameState('gameover');
+        queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      } else {
+        // Safe tile - update revealed tiles and multiplier from server
+        setRevealedTiles(data.revealedTiles || []);
+        setCurrentMultiplier(data.currentMultiplier || 0);
       }
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to reveal tile",
-        variant: "destructive",
-      });
+      setPendingTile(null);
+      console.error("Error revealing tile:", error);
     },
   });
 
   const cashoutMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", "/api/games/mines/cashout", {
+    mutationFn: async (revealedTiles: number[]) => {
+      const response = await apiRequest("POST", "/api/games/mines/cashout", {
         userId: user?.id,
-      }) as Promise<any>;
+        revealedTiles,
+      });
+      return response.json();
     },
     onSuccess: (data: any) => {
-      setGameState('gameover');
-      setMinePositions(data.minePositions);
+      if (data.minePositions) {
+        setMinePositions(data.minePositions);
+      }
+      // Update user balance after cashout
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/games/mines/active", user?.id] });
-      toast({
-        title: "💎 Cashed Out!",
-        description: `You won ${data.payout.toLocaleString()} points!`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to cashout",
-        variant: "destructive",
-      });
     },
   });
 
@@ -150,29 +156,14 @@ function MinesGamePage() {
     const mineCount = parseInt(minesCount);
     
     if (!bet || bet <= 0) {
-      toast({
-        title: "Invalid Bet",
-        description: "Please enter a valid bet amount",
-        variant: "destructive",
-      });
       return;
     }
     
     if (!mineCount || mineCount < 1 || mineCount > 24) {
-      toast({
-        title: "Invalid Mines Count",
-        description: "Mines count must be between 1 and 24",
-        variant: "destructive",
-      });
       return;
     }
     
     if (user && user.points < bet) {
-      toast({
-        title: "Insufficient Points",
-        description: "You don't have enough points",
-        variant: "destructive",
-      });
       return;
     }
     
@@ -181,25 +172,24 @@ function MinesGamePage() {
 
   const handleTileClick = (position: number) => {
     if (gameState !== 'playing') return;
-    if (revealedTiles.includes(position)) return;
-    if (revealTileMutation.isPending) return;
+    if (revealedTiles?.includes(position)) return;
+    if (pendingTile !== null) return;
     
+    setPendingTile(position);
     revealTileMutation.mutate(position);
   };
 
   const handleCashout = () => {
-    if (revealedTiles.length === 0) {
-      toast({
-        title: "Cannot Cashout",
-        description: "You need to reveal at least one tile first",
-        variant: "destructive",
-      });
+    if (!revealedTiles || revealedTiles.length === 0) {
       return;
     }
-    cashoutMutation.mutate();
+    
+    setGameState('gameover');
+    cashoutMutation.mutate(revealedTiles);
   };
 
   const handleNewGame = () => {
+    setPreventRestore(true);
     setGameState('betting');
     setRevealedTiles([]);
     setMinePositions([]);
@@ -208,28 +198,35 @@ function MinesGamePage() {
   };
 
   const getTileContent = (position: number) => {
-    if (gameState === 'gameover' && minePositions.includes(position)) {
+    if (gameState === 'gameover' && minePositions?.includes(position)) {
       return <Bomb className="w-6 h-6 text-white" />;
     }
-    if (revealedTiles.includes(position)) {
+    if (revealedTiles?.includes(position)) {
       return <Gem className="w-6 h-6 text-white" />;
+    }
+    if (pendingTile === position) {
+      return <div className="w-6 h-6 border-2 border-white/50 border-t-white rounded-full animate-spin" />;
     }
     return null;
   };
 
   const getTileStyle = (position: number) => {
     if (gameState === 'gameover') {
-      if (minePositions.includes(position)) {
+      if (minePositions?.includes(position)) {
         return 'bg-gradient-to-br from-red-600 to-red-500 cursor-default';
       }
-      if (revealedTiles.includes(position)) {
+      if (revealedTiles?.includes(position)) {
         return 'bg-gradient-to-br from-green-600 to-green-500 cursor-default';
       }
       return 'bg-zinc-700/50 cursor-default';
     }
     
-    if (revealedTiles.includes(position)) {
+    if (revealedTiles?.includes(position)) {
       return 'bg-gradient-to-br from-green-600 to-green-500 cursor-default';
+    }
+    
+    if (pendingTile === position) {
+      return 'bg-yellow-600/50 cursor-wait animate-pulse';
     }
     
     if (gameState === 'playing') {
@@ -239,8 +236,8 @@ function MinesGamePage() {
     return 'bg-zinc-700/50 cursor-default';
   };
 
-  const potentialPayout = gameState === 'playing' && currentMultiplier > 0
-    ? Math.floor(parseInt(betAmount || "0") * currentMultiplier)
+  const potentialPayout = gameState === 'playing' && (currentMultiplier ?? 0) > 0
+    ? Math.floor((parseInt(betAmount) || 0) * (currentMultiplier ?? 0))
     : 0;
 
   if (!user) {
@@ -361,11 +358,11 @@ function MinesGamePage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-zinc-400">Revealed</span>
-                      <span className="text-green-500 font-bold">{revealedTiles.length} / {safeTiles}</span>
+                      <span className="text-green-500 font-bold">{revealedTiles?.length ?? 0} / {safeTiles}</span>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-zinc-700">
                       <span className="text-sm text-zinc-400">Multiplier</span>
-                      <span className="text-xl font-black text-yellow-500">{currentMultiplier.toFixed(2)}x</span>
+                      <span className="text-xl font-black text-yellow-500">{(currentMultiplier ?? 0).toFixed(2)}x</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-zinc-400">Potential Win</span>
@@ -378,7 +375,7 @@ function MinesGamePage() {
 
                   <Button
                     onClick={handleCashout}
-                    disabled={cashoutMutation.isPending || revealedTiles.length === 0}
+                    disabled={cashoutMutation.isPending || !revealedTiles || revealedTiles.length === 0}
                     className="w-full bg-gradient-to-r from-green-600 to-green-500 hover:opacity-90 text-white border-0 h-12 text-base font-bold"
                     data-testid="button-cashout"
                   >
@@ -406,11 +403,11 @@ function MinesGamePage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-zinc-400">Revealed</span>
-                      <span className="text-white font-bold">{revealedTiles.length}</span>
+                      <span className="text-white font-bold">{revealedTiles?.length ?? 0}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-zinc-400">Final Multiplier</span>
-                      <span className="text-xl font-black text-yellow-500">{currentMultiplier.toFixed(2)}x</span>
+                      <span className="text-xl font-black text-yellow-500">{(currentMultiplier ?? 0).toFixed(2)}x</span>
                     </div>
                   </div>
 
@@ -434,7 +431,7 @@ function MinesGamePage() {
                 <button
                   key={i}
                   onClick={() => handleTileClick(i)}
-                  disabled={gameState !== 'playing' || revealedTiles.includes(i) || revealTileMutation.isPending}
+                  disabled={gameState !== 'playing' || revealedTiles?.includes(i)}
                   className={`aspect-square rounded-lg flex items-center justify-center transition-all ${getTileStyle(i)}`}
                   data-testid={`tile-${i}`}
                 >
