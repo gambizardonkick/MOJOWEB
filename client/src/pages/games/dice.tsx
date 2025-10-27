@@ -190,6 +190,42 @@ function DiceGamePage() {
                   <span>0</span>
                   <span>100</span>
                 </div>
+                
+                <div className="mt-4 relative h-8 bg-zinc-800 rounded-lg overflow-hidden">
+                  <div className="absolute inset-0 flex">
+                    {direction === "under" ? (
+                      <>
+                        <div 
+                          className="bg-red-600/80 flex items-center justify-center text-white text-xs font-bold transition-all duration-300"
+                          style={{ width: `${target}%` }}
+                        >
+                          {target > 15 && `0-${target}`}
+                        </div>
+                        <div 
+                          className="bg-zinc-700/50 flex items-center justify-center text-zinc-400 text-xs transition-all duration-300"
+                          style={{ width: `${100 - target}%` }}
+                        >
+                          {(100 - target) > 15 && `${target}-100`}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div 
+                          className="bg-zinc-700/50 flex items-center justify-center text-zinc-400 text-xs transition-all duration-300"
+                          style={{ width: `${target}%` }}
+                        >
+                          {target > 15 && `0-${target}`}
+                        </div>
+                        <div 
+                          className="bg-green-600/80 flex items-center justify-center text-white text-xs font-bold transition-all duration-300"
+                          style={{ width: `${100 - target}%` }}
+                        >
+                          {(100 - target) > 15 && `${target}-100`}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4 p-4 bg-zinc-800/50 rounded-lg">
