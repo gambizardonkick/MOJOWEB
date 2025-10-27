@@ -13,6 +13,7 @@ import {
   insertShopItemSchema,
   insertRedemptionSchema,
 } from "@shared/schema";
+import { HOUSE_EDGE } from "@shared/constants";
 import { randomBytes } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -725,7 +726,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let payout = 0;
       
       if (won) {
-        payout = Math.floor(betAmount * targetMultiplier);
+        payout = Math.floor(betAmount * targetMultiplier * (1 - HOUSE_EDGE));
         await storage.addPoints(userId, payout);
       }
       
