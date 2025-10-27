@@ -39,17 +39,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     queryFn: async () => {
       const res = await fetch(`/api/users/me?sessionId=${sessionId}`);
       if (!res.ok) {
-        // Clear invalid session
-        localStorage.removeItem("sessionId");
-        setSessionId(null);
         throw new Error("Failed to fetch user");
       }
       return res.json();
     },
   });
 
+  // Clear session when query fails
+  useEffect(() => {
+    if (isError && sessionId) {
+      localStorage.removeItem("sessionId");
+      setSessionId(null);
+    }
+  }, [isError, sessionId]);
+
   return (
-    <UserContext.Provider value={{ user: user || null, sessionId: isError ? null : sessionId, isLoading }}>
+    <UserContext.Provider value={{ user: user || null, sessionId, isLoading }}>
       {children}
     </UserContext.Provider>
   );
