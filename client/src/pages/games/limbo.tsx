@@ -71,6 +71,15 @@ function LimboGamePage() {
       return;
     }
     
+    if (target > 1000) {
+      toast({
+        title: "Invalid Multiplier",
+        description: "Target multiplier cannot exceed 1000",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     if (user && user.points < bet) {
       toast({
         title: "Insufficient Points",
@@ -149,11 +158,13 @@ function LimboGamePage() {
               </div>
 
               <div>
-                <Label htmlFor="multiplier">Target Multiplier</Label>
+                <Label htmlFor="multiplier">Target Multiplier (1.01 - 1000)</Label>
                 <Input
                   id="multiplier"
                   type="number"
                   step="0.01"
+                  min="1.01"
+                  max="1000"
                   value={targetMultiplier}
                   onChange={(e) => setTargetMultiplier(e.target.value)}
                   placeholder="Enter target multiplier"
@@ -286,9 +297,10 @@ function LimboGamePage() {
           <h3 className="text-xl font-bold text-white mb-4">How to Play</h3>
           <ul className="text-zinc-400 space-y-2">
             <li>• Choose your bet amount</li>
-            <li>• Set a target multiplier</li>
+            <li>• Set a target multiplier (between 1.01x and 1000x)</li>
             <li>• Win if the crash point is equal to or above your target</li>
             <li>• Higher multipliers = lower win chance but bigger payouts</li>
+            <li>• All payouts include a 1% house edge</li>
           </ul>
         </Card>
       </div>
