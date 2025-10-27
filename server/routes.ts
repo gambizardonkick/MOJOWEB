@@ -721,13 +721,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.deductPoints(userId, betAmount);
       
-      // Generate crash point using inverse probability distribution
-      // This ensures P(crashPoint >= X) = (1/X) * (1 - HOUSE_EDGE)
-      const random = Math.random();
-      let crashPoint = Math.floor(((1 - HOUSE_EDGE) / random) * 100) / 100;
+      // Generate crash point: random number 0-100, then 99 / random = multiplier
+      const randomNumber = Math.random() * 100;
+      let crashPoint = randomNumber > 0 ? 99 / randomNumber : 1;
       
-      // Display minimum 1.00x since min input is 1.01x
-      if (crashPoint < 1.01) {
+      // Round to 2 decimal places
+      crashPoint = Math.round(crashPoint * 100) / 100;
+      
+      // If multiplier is below 1, show it as 1
+      if (crashPoint < 1) {
         crashPoint = 1.00;
       }
       
@@ -735,7 +737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let payout = 0;
       
       if (won) {
-        payout = Math.floor(betAmount * targetMultiplier * (1 - HOUSE_EDGE));
+        payout = Math.floor(betAmount * targetMultiplier);
         await storage.addPoints(userId, payout);
       }
       
