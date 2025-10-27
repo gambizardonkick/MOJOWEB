@@ -724,7 +724,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate crash point using inverse probability distribution
       // This ensures P(crashPoint >= X) = (1/X) * (1 - HOUSE_EDGE)
       const random = Math.random();
-      const crashPoint = Math.floor(((1 - HOUSE_EDGE) / random) * 100) / 100;
+      let crashPoint = Math.floor(((1 - HOUSE_EDGE) / random) * 100) / 100;
+      
+      // Display minimum 1.00x since min input is 1.01x
+      if (crashPoint < 1.01) {
+        crashPoint = 1.00;
+      }
       
       const won = crashPoint >= targetMultiplier;
       let payout = 0;
