@@ -195,3 +195,16 @@ export const insertRedemptionSchema = createInsertSchema(redemptions).omit({
 
 export type InsertRedemption = z.infer<typeof insertRedemptionSchema>;
 export type Redemption = typeof redemptions.$inferSelect;
+
+// Active Mines Game (not in database, stored in memory/Firebase)
+export interface ActiveMinesGame {
+  id: string;
+  userId: string;
+  betAmount: number;
+  minesCount: number;
+  minePositions: number[]; // array of positions (0-24) where mines are located
+  revealedTiles: number[]; // array of positions (0-24) that have been revealed
+  currentMultiplier: number;
+  gameActive: boolean;
+  createdAt: string;
+}
