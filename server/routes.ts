@@ -721,7 +721,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.deductPoints(userId, betAmount);
       
-      const crashPoint = Math.max(1, Math.floor(Math.random() * 1000) / 100);
+      // Generate crash point using inverse probability distribution
+      // This ensures P(crashPoint >= X) = (1/X) * (1 - HOUSE_EDGE)
+      const random = Math.random();
+      const crashPoint = Math.floor((1 / (random * (1 - HOUSE_EDGE))) * 100) / 100;
+      
       const won = crashPoint >= targetMultiplier;
       let payout = 0;
       
