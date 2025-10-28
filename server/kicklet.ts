@@ -69,6 +69,18 @@ export class KickletService {
     }
   }
 
+  async getAllViewers(kickId: string, pageSize: number = 1000): Promise<KickletViewer[]> {
+    try {
+      const endpoint = `/stats/${kickId}/viewer/ranking?page=1&pageSize=${pageSize}&orderBy=points&order=desc`;
+      const response = await this.makeRequest(endpoint);
+      const data: KickletSearchResponse = await response.json();
+      return data.ranking || [];
+    } catch (error) {
+      console.error('Error fetching all viewers:', error);
+      return [];
+    }
+  }
+
   async addPoints(kickId: string, kickUsername: string, points: number): Promise<void> {
     if (points <= 0) {
       throw new Error('Points must be greater than 0');
