@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
 import { initializeFirebase } from "./firebase";
+import { FirebaseStorage } from "./storage";
+import { KickletSyncService } from "./kicklet-sync";
 
 const app = express();
 
@@ -68,6 +70,11 @@ app.use((req, res, next) => {
   } catch (error) {
     console.error("Failed to seed database:", error);
   }
+
+  // Start Kicklet background sync
+  const storage = new FirebaseStorage();
+  const kickletSync = new KickletSyncService(storage);
+  kickletSync.start();
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
