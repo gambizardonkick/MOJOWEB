@@ -150,35 +150,6 @@ export default function Admin() {
 
   const isProduction = import.meta.env.PROD;
 
-  if (isProduction) {
-    return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-black">
-        <Card className="w-full max-w-md mx-4 p-8 shadow-xl bg-zinc-900 border-zinc-800 border-red-600/50">
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="w-20 h-20 rounded-full bg-red-600/20 border border-red-600/30 flex items-center justify-center">
-              <Lock className="w-10 h-10 text-red-500" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-3">
-                Admin Panel Disabled
-              </h1>
-              <div className="space-y-3 text-sm text-zinc-400">
-                <p className="font-semibold text-red-500">
-                  Security Notice: Admin access unavailable in production
-                </p>
-                <p>
-                  For security reasons, the admin panel is disabled in production builds. Admin functions require server-side authentication.
-                </p>
-                <p className="text-xs text-zinc-500 mt-4">
-                  If you need admin access, please use the development environment or implement proper server-side authentication.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
-  }
 
   if (!isAuthenticated) {
     return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
