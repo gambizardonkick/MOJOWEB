@@ -31,6 +31,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertLeaderboardEntrySchema.parse(req.body);
       const entry = await storage.createLeaderboardEntry(data);
+      await storage.createAdminLog({
+        action: 'create_leaderboard_entry',
+        targetType: 'leaderboard',
+        targetId: entry.id,
+        details: JSON.stringify({ username: entry.username, rank: entry.rank }),
+      });
       res.json(entry);
     } catch (error) {
       res.status(400).json({ error: "Invalid leaderboard entry data" });
@@ -40,6 +46,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/leaderboard/entries/:id", async (req, res) => {
     try {
       const entry = await storage.updateLeaderboardEntry(req.params.id, req.body);
+      await storage.createAdminLog({
+        action: 'update_leaderboard_entry',
+        targetType: 'leaderboard',
+        targetId: req.params.id,
+        details: JSON.stringify(req.body),
+      });
       res.json(entry);
     } catch (error) {
       res.status(500).json({ error: "Failed to update leaderboard entry" });
@@ -49,6 +61,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/leaderboard/entries/:id", async (req, res) => {
     try {
       await storage.deleteLeaderboardEntry(req.params.id);
+      await storage.createAdminLog({
+        action: 'delete_leaderboard_entry',
+        targetType: 'leaderboard',
+        targetId: req.params.id,
+        details: JSON.stringify({ deleted: true }),
+      });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete leaderboard entry" });
@@ -69,6 +87,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertLeaderboardSettingsSchema.parse(req.body);
       const settings = await storage.upsertLeaderboardSettings(data);
+      await storage.createAdminLog({
+        action: 'update_settings',
+        targetType: 'settings',
+        targetId: 'leaderboard',
+        details: JSON.stringify(data),
+      });
       res.json(settings);
     } catch (error) {
       console.error("Leaderboard settings validation error:", error);
@@ -90,6 +114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertLevelMilestoneSchema.parse(req.body);
       const milestone = await storage.createLevelMilestone(data);
+      await storage.createAdminLog({
+        action: 'create_milestone',
+        targetType: 'milestone',
+        targetId: milestone.id,
+        details: JSON.stringify({ level: milestone.level, tier: milestone.tier }),
+      });
       res.json(milestone);
     } catch (error) {
       res.status(400).json({ error: "Invalid milestone data" });
@@ -99,6 +129,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/milestones/:id", async (req, res) => {
     try {
       const milestone = await storage.updateLevelMilestone(req.params.id, req.body);
+      await storage.createAdminLog({
+        action: 'update_milestone',
+        targetType: 'milestone',
+        targetId: req.params.id,
+        details: JSON.stringify(req.body),
+      });
       res.json(milestone);
     } catch (error) {
       res.status(500).json({ error: "Failed to update milestone" });
@@ -108,6 +144,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/milestones/:id", async (req, res) => {
     try {
       await storage.deleteLevelMilestone(req.params.id);
+      await storage.createAdminLog({
+        action: 'delete_milestone',
+        targetType: 'milestone',
+        targetId: req.params.id,
+        details: JSON.stringify({ deleted: true }),
+      });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete milestone" });
@@ -128,6 +170,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertChallengeSchema.parse(req.body);
       const challenge = await storage.createChallenge(data);
+      await storage.createAdminLog({
+        action: 'create_challenge',
+        targetType: 'challenge',
+        targetId: challenge.id,
+        details: JSON.stringify({ game: challenge.game, requirement: challenge.requirement }),
+      });
       res.json(challenge);
     } catch (error) {
       res.status(400).json({ error: "Invalid challenge data" });
@@ -137,6 +185,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/challenges/:id", async (req, res) => {
     try {
       const challenge = await storage.updateChallenge(req.params.id, req.body);
+      await storage.createAdminLog({
+        action: 'update_challenge',
+        targetType: 'challenge',
+        targetId: req.params.id,
+        details: JSON.stringify(req.body),
+      });
       res.json(challenge);
     } catch (error) {
       res.status(500).json({ error: "Failed to update challenge" });
@@ -146,6 +200,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/challenges/:id", async (req, res) => {
     try {
       await storage.deleteChallenge(req.params.id);
+      await storage.createAdminLog({
+        action: 'delete_challenge',
+        targetType: 'challenge',
+        targetId: req.params.id,
+        details: JSON.stringify({ deleted: true }),
+      });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete challenge" });
@@ -204,6 +264,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = insertFreeSpinsOfferSchema.parse(req.body);
       const offer = await storage.createFreeSpinsOffer(data);
+      await storage.createAdminLog({
+        action: 'create_free_spins',
+        targetType: 'free_spins',
+        targetId: offer.id,
+        details: JSON.stringify({ amount: offer.amount, provider: offer.provider }),
+      });
       res.json(offer);
     } catch (error) {
       res.status(400).json({ error: "Invalid free spins offer data" });
@@ -213,6 +279,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/free-spins/:id", async (req, res) => {
     try {
       const offer = await storage.updateFreeSpinsOffer(req.params.id, req.body);
+      await storage.createAdminLog({
+        action: 'update_free_spins',
+        targetType: 'free_spins',
+        targetId: req.params.id,
+        details: JSON.stringify(req.body),
+      });
       res.json(offer);
     } catch (error) {
       res.status(500).json({ error: "Failed to update free spins offer" });
@@ -222,6 +294,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/free-spins/:id", async (req, res) => {
     try {
       await storage.deleteFreeSpinsOffer(req.params.id);
+      await storage.createAdminLog({
+        action: 'delete_free_spins',
+        targetType: 'free_spins',
+        targetId: req.params.id,
+        details: JSON.stringify({ deleted: true }),
+      });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete free spins offer" });
@@ -607,6 +685,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.setPoints(req.params.id, points);
       }
       
+      await storage.createAdminLog({
+        action: `${action}_points`,
+        targetType: 'user',
+        targetId: req.params.id,
+        details: JSON.stringify({ points, action, newBalance: user.points }),
+      });
+      
       res.json(user);
     } catch (error) {
       console.error("Points update error:", error);
@@ -622,6 +707,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Game history error:", error);
       res.status(500).json({ error: "Failed to fetch game history" });
+    }
+  });
+
+  // Admin Logs
+  app.get("/api/admin/logs", async (_req, res) => {
+    try {
+      const logs = await storage.getAdminLogs();
+      res.json(logs);
+    } catch (error) {
+      console.error("Admin logs error:", error);
+      res.status(500).json({ error: "Failed to fetch admin logs" });
     }
   });
 
@@ -1160,8 +1256,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Game Logic - Blackjack (simplified version)
-  app.post("/api/games/blackjack/play", async (req, res) => {
+  // Blackjack helper functions
+  const createDeck = () => {
+    const suits: Array<'hearts' | 'diamonds' | 'clubs' | 'spades'> = ['hearts', 'diamonds', 'clubs', 'spades'];
+    const ranks: Array<'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K'> = 
+      ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+    const deck: any[] = [];
+    
+    for (const suit of suits) {
+      for (const rank of ranks) {
+        let value = parseInt(rank);
+        if (isNaN(value)) {
+          value = rank === 'A' ? 11 : 10;
+        }
+        deck.push({ suit, rank, value });
+      }
+    }
+    
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    
+    return deck;
+  };
+
+  const calculateHandTotal = (cards: any[]) => {
+    let total = 0;
+    let aces = 0;
+    
+    for (const card of cards) {
+      if (card.rank === 'A') {
+        aces++;
+        total += 11;
+      } else {
+        total += card.value;
+      }
+    }
+    
+    while (total > 21 && aces > 0) {
+      total -= 10;
+      aces--;
+    }
+    
+    return total;
+  };
+
+  const createHand = (cards: any[]) => {
+    const total = calculateHandTotal(cards);
+    return {
+      cards,
+      total,
+      isBusted: total > 21,
+      isBlackjack: total === 21 && cards.length === 2,
+    };
+  };
+
+  // Get active blackjack game
+  app.get("/api/games/blackjack/active/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const game = await storage.getActiveBlackjackGame(userId);
+      
+      if (!game) {
+        return res.json({ hasActiveGame: false });
+      }
+      
+      res.json({
+        hasActiveGame: true,
+        game: {
+          ...game,
+          dealerHand: {
+            ...game.dealerHand,
+            cards: game.gameStatus === 'playing' ? [game.dealerHand.cards[0]] : game.dealerHand.cards,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get active blackjack game error:", error);
+      res.status(500).json({ error: "Failed to get active game" });
+    }
+  });
+
+  // Start new blackjack game
+  app.post("/api/games/blackjack/start", async (req, res) => {
     try {
       const gameSchema = z.object({
         userId: z.string(),
@@ -1183,82 +1361,371 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user.points < betAmount) {
         return res.status(400).json({ error: "Insufficient points" });
       }
+
+      const existingGame = await storage.getActiveBlackjackGame(userId);
+      if (existingGame) {
+        return res.status(400).json({ error: "You already have an active game. Please finish it first." });
+      }
       
       await storage.deductPoints(userId, betAmount);
       
-      const drawCard = () => Math.min(Math.floor(Math.random() * 13) + 1, 10);
-      const calculateTotal = (cards: number[]) => {
-        let total = cards.reduce((sum, card) => sum + card, 0);
-        const aces = cards.filter(c => c === 1).length;
-        for (let i = 0; i < aces; i++) {
-          if (total + 10 <= 21) total += 10;
-        }
-        return total;
-      };
+      const deck = createDeck();
+      const playerCards = [deck.pop()!, deck.pop()!];
+      const dealerCards = [deck.pop()!, deck.pop()!];
       
-      const playerCards = [drawCard(), drawCard()];
-      const dealerCards = [drawCard(), drawCard()];
+      const playerHand = createHand(playerCards);
+      const dealerHand = createHand(dealerCards);
+      const dealerHoleCard = dealerCards[1];
       
-      let playerTotal = calculateTotal(playerCards);
-      let dealerTotal = calculateTotal(dealerCards);
+      const canSplit = playerCards[0].rank === playerCards[1].rank;
       
-      while (dealerTotal < 17) {
-        dealerCards.push(drawCard());
-        dealerTotal = calculateTotal(dealerCards);
-      }
-      
-      let won = false;
-      let isPush = false;
-      let payout = 0;
-      
-      if (playerTotal === 21 && playerCards.length === 2) {
-        payout = Math.floor(betAmount * 2.5);
-        won = true;
-      } else if (playerTotal > 21) {
-        won = false;
-      } else if (dealerTotal > 21) {
-        payout = betAmount * 2;
-        won = true;
-      } else if (playerTotal > dealerTotal) {
-        payout = betAmount * 2;
-        won = true;
-      } else if (playerTotal === dealerTotal) {
-        payout = betAmount;
-        isPush = true;
-        won = true;
-      }
-      
-      if (payout > 0) {
-        await storage.addPoints(userId, payout);
-      }
-      
-      const gameData = JSON.stringify({ playerCards, dealerCards, playerTotal, dealerTotal, isPush });
-      await storage.createGameHistory({
+      const game = await storage.createActiveBlackjackGame({
         userId,
-        gameName: 'blackjack',
         betAmount,
-        payout,
-        result: won ? 'win' : 'loss',
-        gameData,
+        deck,
+        playerHands: [playerHand],
+        dealerHand,
+        currentHandIndex: 0,
+        dealerHoleCard,
+        gameStatus: playerHand.isBlackjack ? 'dealer_turn' : 'playing',
+        canDouble: true,
+        canSplit,
+        hasSplit: false,
+        gameActive: true,
       });
-      
-      const updatedUser = await storage.getUser(userId);
+
+      if (playerHand.isBlackjack) {
+        return await finishBlackjackGame(game, storage, res);
+      }
       
       res.json({
-        won,
-        isPush,
-        playerCards,
-        dealerCards,
-        playerTotal,
-        dealerTotal,
-        payout,
-        newBalance: updatedUser?.points || 0,
+        game: {
+          ...game,
+          dealerHand: {
+            ...dealerHand,
+            cards: [dealerCards[0]],
+          },
+        },
       });
     } catch (error) {
-      console.error("Blackjack game error:", error);
-      res.status(500).json({ error: "Failed to play blackjack game" });
+      console.error("Blackjack start error:", error);
+      res.status(500).json({ error: "Failed to start game" });
     }
   });
+
+  // Hit - draw a card
+  app.post("/api/games/blackjack/hit", async (req, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string(),
+      });
+      
+      const validation = schema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error.errors[0].message });
+      }
+      
+      const { userId } = validation.data;
+      const game = await storage.getActiveBlackjackGame(userId);
+      
+      if (!game) {
+        return res.status(404).json({ error: "No active game found" });
+      }
+      
+      if (game.gameStatus !== 'playing') {
+        return res.status(400).json({ error: "Cannot hit in current game state" });
+      }
+      
+      const newCard = game.deck.pop()!;
+      const currentHand = game.playerHands[game.currentHandIndex];
+      const newCards = [...currentHand.cards, newCard];
+      const newHand = createHand(newCards);
+      
+      game.playerHands[game.currentHandIndex] = newHand;
+      game.canDouble = false;
+      game.canSplit = false;
+      
+      if (newHand.isBusted) {
+        if (game.hasSplit && game.currentHandIndex === 0) {
+          game.currentHandIndex = 1;
+        } else {
+          game.gameStatus = 'dealer_turn';
+          await storage.updateActiveBlackjackGame(game.id, game);
+          return await finishBlackjackGame(game, storage, res);
+        }
+      }
+      
+      await storage.updateActiveBlackjackGame(game.id, game);
+      
+      res.json({
+        game: {
+          ...game,
+          dealerHand: {
+            ...game.dealerHand,
+            cards: [game.dealerHand.cards[0]],
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Blackjack hit error:", error);
+      res.status(500).json({ error: "Failed to hit" });
+    }
+  });
+
+  // Stand - end turn
+  app.post("/api/games/blackjack/stand", async (req, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string(),
+      });
+      
+      const validation = schema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error.errors[0].message });
+      }
+      
+      const { userId } = validation.data;
+      const game = await storage.getActiveBlackjackGame(userId);
+      
+      if (!game) {
+        return res.status(404).json({ error: "No active game found" });
+      }
+      
+      if (game.gameStatus !== 'playing') {
+        return res.status(400).json({ error: "Cannot stand in current game state" });
+      }
+      
+      if (game.hasSplit && game.currentHandIndex === 0) {
+        game.currentHandIndex = 1;
+        game.canDouble = true;
+        game.canSplit = false;
+        await storage.updateActiveBlackjackGame(game.id, game);
+        
+        res.json({
+          game: {
+            ...game,
+            dealerHand: {
+              ...game.dealerHand,
+              cards: [game.dealerHand.cards[0]],
+            },
+          },
+        });
+      } else {
+        game.gameStatus = 'dealer_turn';
+        await storage.updateActiveBlackjackGame(game.id, game);
+        return await finishBlackjackGame(game, storage, res);
+      }
+    } catch (error) {
+      console.error("Blackjack stand error:", error);
+      res.status(500).json({ error: "Failed to stand" });
+    }
+  });
+
+  // Double - double bet and draw one card
+  app.post("/api/games/blackjack/double", async (req, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string(),
+      });
+      
+      const validation = schema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error.errors[0].message });
+      }
+      
+      const { userId } = validation.data;
+      const game = await storage.getActiveBlackjackGame(userId);
+      
+      if (!game) {
+        return res.status(404).json({ error: "No active game found" });
+      }
+      
+      if (!game.canDouble) {
+        return res.status(400).json({ error: "Cannot double in current game state" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      if (user.points < game.betAmount) {
+        return res.status(400).json({ error: "Insufficient points to double" });
+      }
+      
+      await storage.deductPoints(userId, game.betAmount);
+      game.betAmount *= 2;
+      
+      const newCard = game.deck.pop()!;
+      const currentHand = game.playerHands[game.currentHandIndex];
+      const newCards = [...currentHand.cards, newCard];
+      const newHand = createHand(newCards);
+      
+      game.playerHands[game.currentHandIndex] = newHand;
+      
+      if (game.hasSplit && game.currentHandIndex === 0) {
+        game.currentHandIndex = 1;
+        game.canDouble = true;
+        game.canSplit = false;
+        await storage.updateActiveBlackjackGame(game.id, game);
+        
+        res.json({
+          game: {
+            ...game,
+            dealerHand: {
+              ...game.dealerHand,
+              cards: [game.dealerHand.cards[0]],
+            },
+          },
+        });
+      } else {
+        game.gameStatus = 'dealer_turn';
+        await storage.updateActiveBlackjackGame(game.id, game);
+        return await finishBlackjackGame(game, storage, res);
+      }
+    } catch (error) {
+      console.error("Blackjack double error:", error);
+      res.status(500).json({ error: "Failed to double" });
+    }
+  });
+
+  // Split - split pair into two hands
+  app.post("/api/games/blackjack/split", async (req, res) => {
+    try {
+      const schema = z.object({
+        userId: z.string(),
+      });
+      
+      const validation = schema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ error: validation.error.errors[0].message });
+      }
+      
+      const { userId } = validation.data;
+      const game = await storage.getActiveBlackjackGame(userId);
+      
+      if (!game) {
+        return res.status(404).json({ error: "No active game found" });
+      }
+      
+      if (!game.canSplit) {
+        return res.status(400).json({ error: "Cannot split in current game state" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      if (user.points < game.betAmount) {
+        return res.status(400).json({ error: "Insufficient points to split" });
+      }
+      
+      await storage.deductPoints(userId, game.betAmount);
+      
+      const currentHand = game.playerHands[0];
+      const card1 = currentHand.cards[0];
+      const card2 = currentHand.cards[1];
+      
+      const newCard1 = game.deck.pop()!;
+      const newCard2 = game.deck.pop()!;
+      
+      const hand1 = createHand([card1, newCard1]);
+      const hand2 = createHand([card2, newCard2]);
+      
+      game.playerHands = [hand1, hand2];
+      game.hasSplit = true;
+      game.currentHandIndex = 0;
+      game.canSplit = false;
+      game.canDouble = true;
+      
+      await storage.updateActiveBlackjackGame(game.id, game);
+      
+      res.json({
+        game: {
+          ...game,
+          dealerHand: {
+            ...game.dealerHand,
+            cards: [game.dealerHand.cards[0]],
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Blackjack split error:", error);
+      res.status(500).json({ error: "Failed to split" });
+    }
+  });
+
+  // Helper function to finish game and play dealer
+  async function finishBlackjackGame(game: any, storage: any, res: any) {
+    while (game.dealerHand.total < 17) {
+      const newCard = game.deck.pop()!;
+      const newCards = [...game.dealerHand.cards, newCard];
+      game.dealerHand = createHand(newCards);
+    }
+    
+    let totalPayout = 0;
+    const results = [];
+    
+    for (const playerHand of game.playerHands) {
+      let handPayout = 0;
+      let result = 'loss';
+      
+      if (playerHand.isBusted) {
+        result = 'loss';
+      } else if (playerHand.isBlackjack && !game.dealerHand.isBlackjack) {
+        handPayout = Math.floor(game.betAmount * 2.5);
+        result = 'blackjack';
+      } else if (game.dealerHand.isBusted) {
+        handPayout = game.betAmount * 2;
+        result = 'win';
+      } else if (playerHand.total > game.dealerHand.total) {
+        handPayout = game.betAmount * 2;
+        result = 'win';
+      } else if (playerHand.total === game.dealerHand.total) {
+        handPayout = game.betAmount;
+        result = 'push';
+      }
+      
+      totalPayout += handPayout;
+      results.push({ hand: playerHand, result, payout: handPayout });
+    }
+    
+    if (totalPayout > 0) {
+      await storage.addPoints(game.userId, totalPayout);
+    }
+    
+    const overallResult = results.every(r => r.result === 'loss') ? 'loss' : 'win';
+    
+    await storage.createGameHistory({
+      userId: game.userId,
+      gameName: 'blackjack',
+      betAmount: game.hasSplit ? game.betAmount : game.betAmount,
+      payout: totalPayout,
+      result: overallResult,
+      gameData: JSON.stringify({
+        playerHands: game.playerHands,
+        dealerHand: game.dealerHand,
+        results,
+        hasSplit: game.hasSplit,
+      }),
+    });
+    
+    await storage.deleteActiveBlackjackGame(game.id);
+    
+    const updatedUser = await storage.getUser(game.userId);
+    
+    res.json({
+      gameOver: true,
+      game: {
+        ...game,
+        gameStatus: 'finished',
+      },
+      results,
+      totalPayout,
+      newBalance: updatedUser?.points || 0,
+    });
+  }
 
   // Game Logic - Keno
   app.post("/api/games/keno/play", async (req, res) => {
@@ -1463,6 +1930,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/shop/redemptions/:id/approve", async (req, res) => {
     try {
       const redemption = await storage.updateRedemption(req.params.id, { status: 'approved' });
+      await storage.createAdminLog({
+        action: 'approve_redemption',
+        targetType: 'redemption',
+        targetId: req.params.id,
+        details: JSON.stringify({ userId: redemption.userId, itemId: redemption.itemId }),
+      });
       res.json(redemption);
     } catch (error) {
       res.status(500).json({ error: "Failed to approve redemption" });
@@ -1483,6 +1956,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const updatedRedemption = await storage.updateRedemption(req.params.id, { status: 'declined' });
+      await storage.createAdminLog({
+        action: 'decline_redemption',
+        targetType: 'redemption',
+        targetId: req.params.id,
+        details: JSON.stringify({ userId: currentRedemption.userId, refundedPoints: currentRedemption.pointsSpent }),
+      });
       res.json(updatedRedemption);
     } catch (error) {
       console.error("Decline redemption error:", error);
