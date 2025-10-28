@@ -18,6 +18,9 @@ import {
   type Redemption,
   type InsertRedemption,
   type ActiveMinesGame,
+  type ActiveBlackjackGame,
+  type AdminLog,
+  type InsertAdminLog,
 } from "@shared/schema";
 import { getDb } from "./firebase";
 import { getKickletService } from "./kicklet";
@@ -74,6 +77,11 @@ export interface IStorage {
   updateActiveMinesGame(gameId: string, data: Partial<ActiveMinesGame>): Promise<ActiveMinesGame>;
   deleteActiveMinesGame(gameId: string): Promise<void>;
 
+  getActiveBlackjackGame(userId: string): Promise<ActiveBlackjackGame | undefined>;
+  createActiveBlackjackGame(game: Omit<ActiveBlackjackGame, 'id' | 'createdAt'>): Promise<ActiveBlackjackGame>;
+  updateActiveBlackjackGame(gameId: string, data: Partial<ActiveBlackjackGame>): Promise<ActiveBlackjackGame>;
+  deleteActiveBlackjackGame(gameId: string): Promise<void>;
+
   getShopItems(): Promise<ShopItem[]>;
   getShopItem(id: string): Promise<ShopItem | undefined>;
   createShopItem(item: InsertShopItem): Promise<ShopItem>;
@@ -83,6 +91,9 @@ export interface IStorage {
   getRedemptions(userId?: string): Promise<Redemption[]>;
   createRedemption(redemption: InsertRedemption): Promise<Redemption>;
   updateRedemption(id: string, data: Partial<InsertRedemption>): Promise<Redemption>;
+
+  getAdminLogs(): Promise<AdminLog[]>;
+  createAdminLog(log: InsertAdminLog): Promise<AdminLog>;
 
   storeKickVerifier(sessionId: string, codeVerifier: string): Promise<void>;
   getKickVerifier(sessionId: string): Promise<string | undefined>;
@@ -612,6 +623,81 @@ export class FirebaseStorage implements IStorage {
     await this.db.ref(`activeMinesGames/${gameId}`).remove();
   }
 
+  async getActiveBlackjackGame(userId: string): Promise<ActiveBlackjackGame | undefined> {
+    const snapshot = await this.db.ref('activeBlackjackGames').get();
+    if (!snapshot.exists()) return undefined;
+    
+    let game: ActiveBlackjackGame | undefined;
+    snapshot.forEach((child) => {
+      const data = child.val();
+      if (data.userId === userId && data.gameActive) {
+        game = {
+          id: child.key!,
+          ...data,
+          deck: typeof data.deck === 'string' ? JSON.parse(data.deck) : (data.deck || []),
+          playerHands: typeof data.playerHands === 'string' ? JSON.parse(data.playerHands) : (data.playerHands || []),
+          dealerHand: typeof data.dealerHand === 'string' ? JSON.parse(data.dealerHand) : data.dealerHand,
+          dealerHoleCard: typeof data.dealerHoleCard === 'string' ? JSON.parse(data.dealerHoleCard) : data.dealerHoleCard,
+        } as ActiveBlackjackGame;
+      }
+    });
+    return game;
+  }
+
+  async createActiveBlackjackGame(game: Omit<ActiveBlackjackGame, 'id' | 'createdAt'>): Promise<ActiveBlackjackGame> {
+    const newRef = this.db.ref('activeBlackjackGames').push();
+    const gameData = {
+      ...game,
+      deck: JSON.stringify(game.deck),
+      playerHands: JSON.stringify(game.playerHands),
+      dealerHand: JSON.stringify(game.dealerHand),
+      dealerHoleCard: JSON.stringify(game.dealerHoleCard),
+      createdAt: new Date().toISOString(),
+    };
+    await newRef.set(gameData);
+    const snapshot = await newRef.get();
+    const data = snapshot.val();
+    return {
+      id: snapshot.key!,
+      ...data,
+      deck: JSON.parse(data.deck),
+      playerHands: JSON.parse(data.playerHands),
+      dealerHand: JSON.parse(data.dealerHand),
+      dealerHoleCard: JSON.parse(data.dealerHoleCard),
+    } as ActiveBlackjackGame;
+  }
+
+  async updateActiveBlackjackGame(gameId: string, data: Partial<ActiveBlackjackGame>): Promise<ActiveBlackjackGame> {
+    const updateData: any = { ...data };
+    if (data.deck) {
+      updateData.deck = JSON.stringify(data.deck);
+    }
+    if (data.playerHands) {
+      updateData.playerHands = JSON.stringify(data.playerHands);
+    }
+    if (data.dealerHand) {
+      updateData.dealerHand = JSON.stringify(data.dealerHand);
+    }
+    if (data.dealerHoleCard !== undefined) {
+      updateData.dealerHoleCard = JSON.stringify(data.dealerHoleCard);
+    }
+    await this.db.ref(`activeBlackjackGames/${gameId}`).update(updateData);
+    const snapshot = await this.db.ref(`activeBlackjackGames/${gameId}`).get();
+    const savedData = snapshot.val();
+    return {
+      id: snapshot.key!,
+      ...savedData,
+      deck: typeof savedData.deck === 'string' ? JSON.parse(savedData.deck) : (savedData.deck || []),
+      playerHands: typeof savedData.playerHands === 'string' ? JSON.parse(savedData.playerHands) : (savedData.playerHands || []),
+      dealerHand: typeof savedData.dealerHand === 'string' ? JSON.parse(savedData.dealerHand) : savedData.dealerHand,
+      dealerHoleCard: typeof savedData.dealerHoleCard === 'string' ? JSON.parse(savedData.dealerHoleCard) : savedData.dealerHoleCard,
+    } as ActiveBlackjackGame;
+  }
+
+  async deleteActiveBlackjackGame(gameId: string): Promise<void> {
+    await this.db.ref(`activeBlackjackGames/${gameId}`).remove();
+  }
+
   async getShopItems(): Promise<ShopItem[]> {
     const snapshot = await this.db.ref('shopItems').get();
     if (!snapshot.exists()) return [];
@@ -688,6 +774,32 @@ export class FirebaseStorage implements IStorage {
     await this.db.ref(`redemptions/${id}`).update(data);
     const snapshot = await this.db.ref(`redemptions/${id}`).get();
     return { id: snapshot.key!, ...snapshot.val() } as Redemption;
+  }
+
+  async getAdminLogs(): Promise<AdminLog[]> {
+    const snapshot = await this.db.ref('adminLogs').get();
+    if (!snapshot.exists()) return [];
+    
+    const logs: AdminLog[] = [];
+    snapshot.forEach((child) => {
+      logs.push({ id: child.key!, ...child.val() } as AdminLog);
+    });
+    
+    return logs.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }
+
+  async createAdminLog(log: InsertAdminLog): Promise<AdminLog> {
+    const newRef = this.db.ref('adminLogs').push();
+    await newRef.set({
+      ...log,
+      createdAt: new Date().toISOString(),
+    });
+    const snapshot = await newRef.get();
+    return { id: snapshot.key!, ...snapshot.val() } as AdminLog;
   }
 
   async storeKickVerifier(sessionId: string, codeVerifier: string): Promise<void> {
