@@ -68,6 +68,8 @@ export interface IStorage {
   addPoints(userId: string, points: number): Promise<User>;
   deductPoints(userId: string, points: number): Promise<User>;
   setPoints(userId: string, points: number): Promise<User>;
+  syncPointsFromKicklet(userId: string): Promise<User>;
+  syncAllUsersFromKicklet(): Promise<void>;
 
   getGameHistory(userId: string): Promise<GameHistory[]>;
   createGameHistory(history: InsertGameHistory): Promise<GameHistory>;
@@ -463,8 +465,10 @@ export class FirebaseStorage implements IStorage {
         await this.db.ref(`users/${userId}`).update({ points: kickletPoints });
         user.points = kickletPoints;
       } catch (error) {
-        console.error(`Error adding Kicklet points for user ${userId}:`, error);
-        throw error;
+        console.error(`Error syncing Kicklet points for user ${userId}, falling back to local update:`, error);
+        const newPoints = (user.points || 0) + points;
+        await this.db.ref(`users/${userId}`).update({ points: newPoints });
+        user.points = newPoints;
       }
     } else {
       const newPoints = (user.points || 0) + points;
@@ -492,8 +496,10 @@ export class FirebaseStorage implements IStorage {
         await this.db.ref(`users/${userId}`).update({ points: kickletPoints });
         user.points = kickletPoints;
       } catch (error) {
-        console.error(`Error deducting Kicklet points for user ${userId}:`, error);
-        throw error;
+        console.error(`Error syncing Kicklet points for user ${userId}, falling back to local update:`, error);
+        const newPoints = Math.max(0, (user.points || 0) - points);
+        await this.db.ref(`users/${userId}`).update({ points: newPoints });
+        user.points = newPoints;
       }
     } else {
       const newPoints = Math.max(0, (user.points || 0) - points);
@@ -521,8 +527,10 @@ export class FirebaseStorage implements IStorage {
         await this.db.ref(`users/${userId}`).update({ points: kickletPoints });
         user.points = kickletPoints;
       } catch (error) {
-        console.error(`Error setting Kicklet points for user ${userId}:`, error);
-        throw error;
+        console.error(`Error syncing Kicklet points for user ${userId}, falling back to local update:`, error);
+        const newPoints = Math.max(0, points);
+        await this.db.ref(`users/${userId}`).update({ points: newPoints });
+        user.points = newPoints;
       }
     } else {
       const newPoints = Math.max(0, points);
@@ -531,6 +539,96 @@ export class FirebaseStorage implements IStorage {
     }
     
     return user;
+  }
+
+  async syncPointsFromKicklet(userId: string): Promise<User> {
+    const snapshot = await this.db.ref(`users/${userId}`).get();
+    if (!snapshot.exists()) throw new Error('User not found');
+    const user = { id: snapshot.key!, ...snapshot.val() } as User;
+    
+    if (user.kickUsername && user.kickUserId) {
+      try {
+        const channelId = process.env.KICK_CHANNEL_ID;
+        if (!channelId) {
+          return user;
+        }
+        const kicklet = getKickletService();
+        const kickletPoints = await kicklet.getViewerPoints(channelId, user.kickUsername);
+        
+        if (user.points !== kickletPoints) {
+          await this.db.ref(`users/${userId}`).update({ 
+            points: kickletPoints,
+            lastKickletSync: new Date().toISOString(),
+          });
+          user.points = kickletPoints;
+          user.lastKickletSync = new Date().toISOString() as any;
+        }
+      } catch (error) {
+        console.error(`Error syncing Kicklet points for user ${userId}:`, error);
+      }
+    }
+    
+    return user;
+  }
+
+  async syncAllUsersFromKicklet(): Promise<void> {
+    try {
+      const channelId = process.env.KICK_CHANNEL_ID;
+      if (!channelId) {
+        return;
+      }
+
+      const users = await this.getUsers();
+      const kickUsers = users.filter(u => u.kickUsername && u.kickUserId);
+      
+      if (kickUsers.length === 0) {
+        return;
+      }
+
+      console.log(`Syncing points for ${kickUsers.length} Kick users from Kicklet...`);
+      
+      const kicklet = getKickletService();
+      const allViewers = await kicklet.getAllViewers(channelId);
+      
+      if (allViewers.length === 0) {
+        console.log('No viewers found in Kicklet');
+        return;
+      }
+
+      console.log(`Fetched ${allViewers.length} viewers from Kicklet in single request`);
+      
+      const viewerMap = new Map(
+        allViewers.map(v => [v.viewerKickUsername.toLowerCase(), v.points])
+      );
+
+      let updatedCount = 0;
+      const updatePromises = kickUsers.map(async (user) => {
+        try {
+          const kickletPoints = viewerMap.get(user.kickUsername!.toLowerCase());
+          
+          if (kickletPoints === undefined) {
+            console.log(`  User ${user.kickUsername} not found in Kicklet, skipping`);
+            return;
+          }
+          
+          if (user.points !== kickletPoints) {
+            console.log(`  User ${user.kickUsername}: ${user.points} -> ${kickletPoints}`);
+            await this.db.ref(`users/${user.id}`).update({ 
+              points: kickletPoints,
+              lastKickletSync: new Date().toISOString(),
+            });
+            updatedCount++;
+          }
+        } catch (error) {
+          console.error(`  Error syncing points for ${user.kickUsername}:`, error);
+        }
+      });
+
+      await Promise.all(updatePromises);
+      console.log(`Kicklet sync completed - ${updatedCount} users updated`);
+    } catch (error) {
+      console.error('Error in syncAllUsersFromKicklet:', error);
+    }
   }
 
   async getGameHistory(userId: string): Promise<GameHistory[]> {
