@@ -15,6 +15,7 @@ import Referral from "@/pages/referral";
 import Admin from "@/pages/admin";
 import Dashboard from "@/pages/dashboard";
 import Shop from "@/pages/shop";
+import Tournament from "@/pages/tournament";
 import DiceGame from "@/pages/games/dice";
 import LimboGame from "@/pages/games/limbo";
 import MinesGame from "@/pages/games/mines";
@@ -34,6 +35,7 @@ function Router() {
       <Route path="/free-spins" component={FreeSpins} />
       <Route path="/referral" component={Referral} />
       <Route path="/admin" component={Admin} />
+      <Route path="/tournament" component={Tournament} />
       <Route path="/" component={Leaderboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/shop" component={Shop} />
