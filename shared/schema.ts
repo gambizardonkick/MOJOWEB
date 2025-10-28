@@ -196,6 +196,24 @@ export const insertRedemptionSchema = createInsertSchema(redemptions).omit({
 export type InsertRedemption = z.infer<typeof insertRedemptionSchema>;
 export type Redemption = typeof redemptions.$inferSelect;
 
+// Admin Logs
+export const adminLogs = pgTable("admin_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  action: text("action").notNull(), // add_points, remove_points, set_points, create_entry, update_entry, delete_entry, etc.
+  targetType: text("target_type").notNull(), // user, leaderboard, milestone, challenge, free_spin, shop_item, redemption
+  targetId: varchar("target_id"), // ID of the affected item
+  details: text("details").notNull(), // JSON string with change details
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAdminLogSchema = createInsertSchema(adminLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAdminLog = z.infer<typeof insertAdminLogSchema>;
+export type AdminLog = typeof adminLogs.$inferSelect;
+
 // Active Mines Game (not in database, stored in memory/Firebase)
 export interface ActiveMinesGame {
   id: string;
@@ -205,6 +223,37 @@ export interface ActiveMinesGame {
   minePositions: number[]; // array of positions (0-24) where mines are located
   revealedTiles: number[]; // array of positions (0-24) that have been revealed
   currentMultiplier: number;
+  gameActive: boolean;
+  createdAt: string;
+}
+
+// Active Blackjack Game (not in database, stored in memory/Firebase)
+export interface Card {
+  suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
+  rank: 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K';
+  value: number;
+}
+
+export interface BlackjackHand {
+  cards: Card[];
+  total: number;
+  isBusted: boolean;
+  isBlackjack: boolean;
+}
+
+export interface ActiveBlackjackGame {
+  id: string;
+  userId: string;
+  betAmount: number;
+  deck: Card[];
+  playerHands: BlackjackHand[]; // Array to support split hands
+  dealerHand: BlackjackHand;
+  currentHandIndex: number; // Which hand is being played (for splits)
+  dealerHoleCard: Card | null; // The face-down card
+  gameStatus: 'betting' | 'playing' | 'dealer_turn' | 'finished';
+  canDouble: boolean;
+  canSplit: boolean;
+  hasSplit: boolean;
   gameActive: boolean;
   createdAt: string;
 }
