@@ -71,6 +71,11 @@ const gameMenuItems = [
     url: "/games/mines",
     icon: Bomb,
   },
+  {
+    title: "Blackjack",
+    url: "/games/blackjack",
+    icon: Spade,
+  },
 ];
 
 const socialLinks = [
