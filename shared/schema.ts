@@ -257,3 +257,28 @@ export interface ActiveBlackjackGame {
   gameActive: boolean;
   createdAt: string;
 }
+
+// Tournament Bracket (stored in Firebase)
+export interface TournamentPlayer {
+  name: string;
+  multiplier: number | null;
+}
+
+export interface TournamentMatch {
+  id: string;
+  player1: TournamentPlayer;
+  player2: TournamentPlayer;
+  winner: string | null;
+  completed: boolean;
+}
+
+export interface TournamentBracket {
+  [round: string]: TournamentMatch[];
+}
+
+export interface TournamentData {
+  size: 4 | 8 | 16 | 32;
+  bracket: TournamentBracket;
+  champion: string;
+  lastUpdated: string;
+}
