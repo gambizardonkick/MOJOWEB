@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
   Plus, Trash2, Save, Settings as SettingsIcon, Pencil, Lock, X,
   LayoutDashboard, Trophy, Target, Gift, Users, Coins, ShoppingBag, Package,
-  CheckCircle, XCircle, Clock
+  CheckCircle, XCircle, Clock, History, ScrollText
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ import type {
   ShopItem,
   InsertShopItem,
   Redemption,
+  GameHistory,
+  AdminLog,
 } from "@shared/schema";
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
@@ -140,7 +142,7 @@ function PasswordGate({ onAuthenticated }: { onAuthenticated: () => void }) {
   );
 }
 
-type NavSection = "leaderboard" | "milestones" | "challenges" | "free-spins" | "users" | "shop-items" | "redemptions" | "settings";
+type NavSection = "leaderboard" | "milestones" | "challenges" | "free-spins" | "users" | "shop-items" | "redemptions" | "admin-logs" | "settings";
 
 export default function Admin() {
   const [activeSection, setActiveSection] = useState<NavSection>("leaderboard");
@@ -148,6 +150,35 @@ export default function Admin() {
 
   const isProduction = import.meta.env.PROD;
 
+  if (isProduction) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-black">
+        <Card className="w-full max-w-md mx-4 p-8 shadow-xl bg-zinc-900 border-zinc-800 border-red-600/50">
+          <div className="flex flex-col items-center gap-6 text-center">
+            <div className="w-20 h-20 rounded-full bg-red-600/20 border border-red-600/30 flex items-center justify-center">
+              <Lock className="w-10 h-10 text-red-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white mb-3">
+                Admin Panel Disabled
+              </h1>
+              <div className="space-y-3 text-sm text-zinc-400">
+                <p className="font-semibold text-red-500">
+                  Security Notice: Admin access unavailable in production
+                </p>
+                <p>
+                  For security reasons, the admin panel is disabled in production builds. Admin functions require server-side authentication.
+                </p>
+                <p className="text-xs text-zinc-500 mt-4">
+                  If you need admin access, please use the development environment or implement proper server-side authentication.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
@@ -161,6 +192,7 @@ export default function Admin() {
     { id: "users" as NavSection, label: "Users & Points", icon: Coins, testId: "tab-users" },
     { id: "shop-items" as NavSection, label: "Shop Items", icon: ShoppingBag, testId: "tab-shop-items" },
     { id: "redemptions" as NavSection, label: "Redemption Center", icon: Package, testId: "tab-redemptions" },
+    { id: "admin-logs" as NavSection, label: "Admin Logs", icon: ScrollText, testId: "tab-admin-logs" },
     { id: "settings" as NavSection, label: "Settings", icon: SettingsIcon, testId: "tab-settings" },
   ];
 
@@ -222,6 +254,7 @@ export default function Admin() {
           {activeSection === "users" && <UsersAdmin />}
           {activeSection === "shop-items" && <ShopItemsAdmin />}
           {activeSection === "redemptions" && <RedemptionCenterAdmin />}
+          {activeSection === "admin-logs" && <AdminLogsSection />}
           {activeSection === "settings" && <SettingsAdmin />}
         </div>
       </div>
@@ -1739,6 +1772,12 @@ function UsersAdmin() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [pointsAmount, setPointsAmount] = useState("");
   const [action, setAction] = useState<'add' | 'remove' | 'set'>('add');
+  const [viewingHistory, setViewingHistory] = useState<User | null>(null);
+  
+  const { data: betHistory } = useQuery<GameHistory[]>({
+    queryKey: ["/api/games/history", viewingHistory?.id],
+    enabled: !!viewingHistory,
+  });
 
   const managePointsMutation = useMutation({
     mutationFn: ({ userId, points, action }: { userId: string; points: number; action: 'add' | 'remove' | 'set' }) =>
@@ -1820,18 +1859,29 @@ function UsersAdmin() {
                   <div className="text-2xl font-bold text-white">{user.points.toLocaleString()}</div>
                 </div>
               </div>
-              <Button
-                onClick={() => {
-                  setSelectedUser(user);
-                  setPointsAmount("");
-                  setAction('add');
-                }}
-                className="ml-4 bg-red-600 hover:bg-red-700 text-white"
-                data-testid={`button-manage-points-${user.id}`}
-              >
-                <Coins className="w-4 h-4 mr-2" />
-                Manage Points
-              </Button>
+              <div className="ml-4 flex gap-2">
+                <Button
+                  onClick={() => setViewingHistory(user)}
+                  variant="outline"
+                  className="hover:bg-zinc-800 text-white"
+                  data-testid={`button-view-history-${user.id}`}
+                >
+                  <History className="w-4 h-4 mr-2" />
+                  Bet History
+                </Button>
+                <Button
+                  onClick={() => {
+                    setSelectedUser(user);
+                    setPointsAmount("");
+                    setAction('add');
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  data-testid={`button-manage-points-${user.id}`}
+                >
+                  <Coins className="w-4 h-4 mr-2" />
+                  Manage Points
+                </Button>
+              </div>
             </div>
           ))}
           {(!users || users.length === 0) && (
@@ -1920,6 +1970,50 @@ function UsersAdmin() {
               <div>• <strong>Remove:</strong> Decreases points by the amount</div>
               <div>• <strong>Set:</strong> Sets points to the exact amount</div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingHistory} onOpenChange={(open) => !open && setViewingHistory(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">Bet History</DialogTitle>
+            <DialogDescription className="text-zinc-400">
+              Game history for {viewingHistory?.kickUsername || `User #${viewingHistory?.id.slice(0, 8)}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-4">
+            {betHistory && betHistory.length > 0 ? (
+              betHistory.map((game) => (
+                <div
+                  key={game.id}
+                  className="p-4 bg-zinc-950 border border-zinc-800 rounded-lg"
+                  data-testid={`bet-history-${game.id}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="font-semibold text-white capitalize">{game.gameName}</div>
+                      <div className={`text-sm font-medium ${game.result === 'win' ? 'text-green-500' : 'text-red-500'}`}>
+                        {game.result === 'win' ? 'WON' : 'LOST'}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-zinc-400">Bet: {game.betAmount}</div>
+                      <div className={`text-sm font-semibold ${game.payout > 0 ? 'text-green-500' : 'text-zinc-500'}`}>
+                        Payout: {game.payout}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-2">
+                    {new Date(game.createdAt).toLocaleString()}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12 text-zinc-500">
+                <p>No bet history yet.</p>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -2532,6 +2626,64 @@ function SettingsAdmin() {
             <Save className="w-4 h-4 mr-2" />
             Save Settings
           </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function AdminLogsSection() {
+  const { data: logs } = useQuery<AdminLog[]>({
+    queryKey: ["/api/admin/logs"],
+  });
+
+  return (
+    <div className="space-y-6 max-w-6xl">
+      <div>
+        <h2 className="text-2xl font-bold text-white mb-2">Admin Activity Logs</h2>
+        <p className="text-zinc-400">Track all administrative actions and changes</p>
+      </div>
+
+      <Card className="p-6 bg-zinc-900 border-zinc-800">
+        <div className="space-y-3">
+          {logs && logs.length > 0 ? (
+            logs.map((log) => (
+              <div
+                key={log.id}
+                className="p-4 bg-zinc-950 border border-zinc-800 rounded-lg"
+                data-testid={`admin-log-${log.id}`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="font-semibold text-white capitalize">
+                        {log.action.replace('_', ' ')}
+                      </div>
+                      <div className="text-xs text-zinc-500 uppercase px-2 py-1 bg-zinc-800 rounded">
+                        {log.targetType}
+                      </div>
+                    </div>
+                    <div className="text-sm text-zinc-400 mb-2">
+                      Target ID: {log.targetId}
+                    </div>
+                    {log.details && (
+                      <div className="text-xs font-mono text-zinc-500 bg-zinc-900 p-2 rounded mt-2 max-w-2xl overflow-auto">
+                        {log.details}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-zinc-500 text-right whitespace-nowrap ml-4">
+                    {new Date(log.createdAt).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-12 text-zinc-500">
+              <ScrollText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No admin activity logs yet.</p>
+            </div>
+          )}
         </div>
       </Card>
     </div>
