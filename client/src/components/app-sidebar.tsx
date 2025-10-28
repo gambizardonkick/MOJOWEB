@@ -1,4 +1,4 @@
-import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag, Bomb, Spade, TrendingUp } from "lucide-react";
+import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag, Bomb, Spade, TrendingUp, Swords } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -26,6 +26,11 @@ const mainMenuItems = [
     title: "Milestones",
     url: "/milestones",
     icon: Award,
+  },
+  {
+    title: "Tournament",
+    url: "/tournament",
+    icon: Swords,
   },
 ];
 
