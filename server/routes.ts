@@ -1974,6 +1974,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ timestamp: new Date().toISOString() });
   });
 
+  // Tournament routes
+  app.get("/api/tournament", async (_req, res) => {
+    try {
+      const { getDb } = await import("./firebase");
+      const db = getDb();
+      const snapshot = await db.ref('tournament').once('value');
+      const tournamentData = snapshot.val();
+      
+      if (tournamentData) {
+        res.json(tournamentData);
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch tournament:", error);
+      res.status(500).json({ error: "Failed to fetch tournament data" });
+    }
+  });
+
+  app.post("/api/tournament", async (req, res) => {
+    try {
+      const { getDb } = await import("./firebase");
+      const db = getDb();
+      
+      const tournamentData = req.body;
+      await db.ref('tournament').set(tournamentData);
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to save tournament:", error);
+      res.status(500).json({ error: "Failed to save tournament data" });
+    }
+  });
+
+  app.post("/api/tournament/reset", async (_req, res) => {
+    try {
+      const { getDb } = await import("./firebase");
+      const db = getDb();
+      
+      await db.ref('tournament').remove();
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to reset tournament:", error);
+      res.status(500).json({ error: "Failed to reset tournament data" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
