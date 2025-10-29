@@ -6,6 +6,7 @@ import { initializeFirebase } from "./firebase";
 import { FirebaseStorage } from "./storage";
 import { KickletSyncService } from "./kicklet-sync";
 import { setupWebSocket } from "./websocket";
+import { GiveawayCheckerService } from "./giveaway-checker";
 
 const app = express();
 
@@ -76,6 +77,10 @@ app.use((req, res, next) => {
   const storage = new FirebaseStorage();
   const kickletSync = new KickletSyncService(storage);
   kickletSync.start();
+
+  // Start automatic giveaway completion service
+  const giveawayChecker = new GiveawayCheckerService(storage);
+  giveawayChecker.start();
 
   // Setup WebSocket server
   setupWebSocket(server);
