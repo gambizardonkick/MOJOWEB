@@ -5,6 +5,7 @@ import { seedDatabase } from "./seed";
 import { initializeFirebase } from "./firebase";
 import { FirebaseStorage } from "./storage";
 import { KickletSyncService } from "./kicklet-sync";
+import { setupWebSocket } from "./websocket";
 
 const app = express();
 
@@ -75,6 +76,10 @@ app.use((req, res, next) => {
   const storage = new FirebaseStorage();
   const kickletSync = new KickletSyncService(storage);
   kickletSync.start();
+
+  // Setup WebSocket server
+  setupWebSocket(server);
+  log('WebSocket server initialized');
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
