@@ -12,6 +12,8 @@ import {
   insertGameHistorySchema,
   insertShopItemSchema,
   insertRedemptionSchema,
+  insertGiveawaySchema,
+  insertGiveawayEntrySchema,
 } from "@shared/schema";
 import { HOUSE_EDGE } from "@shared/constants";
 import { randomBytes } from "crypto";
@@ -718,6 +720,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Admin logs error:", error);
       res.status(500).json({ error: "Failed to fetch admin logs" });
+    }
+  });
+
+  // Giveaways
+  app.get("/api/giveaways", async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const giveaways = await storage.getGiveaways(status);
+      res.json(giveaways);
+    } catch (error) {
+      console.error("Giveaways fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch giveaways" });
+    }
+  });
+
+  app.get("/api/giveaways/:id", async (req, res) => {
+    try {
+      const giveaway = await storage.getGiveaway(req.params.id);
+      if (!giveaway) {
+        return res.status(404).json({ error: "Giveaway not found" });
+      }
+      res.json(giveaway);
+    } catch (error) {
+      console.error("Giveaway fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch giveaway" });
+    }
+  });
+
+  app.post("/api/giveaways", async (req, res) => {
+    try {
+      const parsedData = {
+        ...req.body,
+        endTime: req.body.endTime ? new Date(req.body.endTime) : new Date(Date.now() + (req.body.durationMinutes || 60) * 60 * 1000),
+      };
+      const data = insertGiveawaySchema.parse(parsedData);
+      const giveaway = await storage.createGiveaway(data);
+      await storage.createAdminLog({
+        action: 'create_giveaway',
+        targetType: 'giveaway',
+        targetId: giveaway.id,
+        details: JSON.stringify({ points: giveaway.points, durationMinutes: giveaway.durationMinutes }),
+      });
+      res.json(giveaway);
+    } catch (error) {
+      console.error("Giveaway creation error:", error);
+      res.status(400).json({ error: "Invalid giveaway data" });
+    }
+  });
+
+  app.delete("/api/giveaways/:id", async (req, res) => {
+    try {
+      await storage.deleteGiveaway(req.params.id);
+      await storage.createAdminLog({
+        action: 'delete_giveaway',
+        targetType: 'giveaway',
+        targetId: req.params.id,
+        details: JSON.stringify({ deleted: true }),
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Giveaway deletion error:", error);
+      res.status(500).json({ error: "Failed to delete giveaway" });
+    }
+  });
+
+  app.post("/api/giveaways/:id/complete", async (req, res) => {
+    try {
+      const giveaway = await storage.getGiveaway(req.params.id);
+      if (!giveaway) {
+        return res.status(404).json({ error: "Giveaway not found" });
+      }
+
+      if (giveaway.status === 'completed') {
+        return res.status(400).json({ error: "Giveaway already completed" });
+      }
+
+      const entries = await storage.getGiveawayEntries(req.params.id);
+      if (entries.length === 0) {
+        return res.status(400).json({ error: "No entries to select winner from" });
+      }
+
+      const randomIndex = Math.floor(Math.random() * entries.length);
+      const winner = entries[randomIndex];
+
+      await storage.addPoints(winner.userId, giveaway.points);
+      
+      const completedGiveaway = await storage.completeGiveaway(
+        req.params.id,
+        winner.userId,
+        winner.username,
+        winner.discordUsername || null
+      );
+
+      await storage.createAdminLog({
+        action: 'complete_giveaway',
+        targetType: 'giveaway',
+        targetId: req.params.id,
+        details: JSON.stringify({ 
+          winnerId: winner.userId,
+          winnerUsername: winner.username,
+          points: giveaway.points
+        }),
+      });
+
+      res.json(completedGiveaway);
+    } catch (error) {
+      console.error("Giveaway completion error:", error);
+      res.status(500).json({ error: "Failed to complete giveaway" });
+    }
+  });
+
+  app.get("/api/giveaways/:id/entries", async (req, res) => {
+    try {
+      const entries = await storage.getGiveawayEntries(req.params.id);
+      res.json(entries);
+    } catch (error) {
+      console.error("Giveaway entries fetch error:", error);
+      res.status(500).json({ error: "Failed to fetch giveaway entries" });
+    }
+  });
+
+  app.post("/api/giveaways/:id/enter", async (req, res) => {
+    try {
+      const sessionId = req.query.sessionId as string;
+      if (!sessionId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const user = await storage.getUserBySessionId(sessionId);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const giveaway = await storage.getGiveaway(req.params.id);
+      if (!giveaway) {
+        return res.status(404).json({ error: "Giveaway not found" });
+      }
+
+      if (giveaway.status !== 'active') {
+        return res.status(400).json({ error: "Giveaway is not active" });
+      }
+
+      if (new Date(giveaway.endTime) < new Date()) {
+        return res.status(400).json({ error: "Giveaway has ended" });
+      }
+
+      const existingEntry = await storage.getUserGiveawayEntry(req.params.id, user.id);
+      if (existingEntry) {
+        return res.status(400).json({ error: "Already entered this giveaway" });
+      }
+
+      const entry = await storage.createGiveawayEntry({
+        giveawayId: req.params.id,
+        userId: user.id,
+        username: user.kickUsername || user.username || 'Anonymous',
+        discordUserId: user.discordUserId || null,
+        discordUsername: user.discordUsername || null,
+      });
+
+      res.json(entry);
+    } catch (error) {
+      console.error("Giveaway entry error:", error);
+      res.status(500).json({ error: "Failed to enter giveaway" });
     }
   });
 
