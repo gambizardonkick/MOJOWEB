@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
   Plus, Trash2, Save, Settings as SettingsIcon, Pencil, Lock, X,
   LayoutDashboard, Trophy, Target, Gift, Users, Coins, ShoppingBag, Package,
-  CheckCircle, XCircle, Clock, History, ScrollText
+  CheckCircle, XCircle, Clock, History, ScrollText, PartyPopper
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useUser } from "@/contexts/UserContext";
 import type {
   LeaderboardEntry,
   LeaderboardSettings,
@@ -37,9 +38,13 @@ import type {
   Redemption,
   GameHistory,
   AdminLog,
+  Giveaway,
+  InsertGiveaway,
+  GiveawayEntry,
 } from "@shared/schema";
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+const WHITELISTED_DISCORD_IDS = ['1356903329518583948', '1197661923718737961'];
 
 function PasswordGate({ onAuthenticated }: { onAuthenticated: () => void }) {
   const [password, setPassword] = useState("");
@@ -142,14 +147,56 @@ function PasswordGate({ onAuthenticated }: { onAuthenticated: () => void }) {
   );
 }
 
-type NavSection = "leaderboard" | "milestones" | "challenges" | "free-spins" | "users" | "shop-items" | "redemptions" | "admin-logs" | "settings";
+type NavSection = "leaderboard" | "milestones" | "challenges" | "free-spins" | "users" | "shop-items" | "redemptions" | "admin-logs" | "settings" | "giveaways";
 
 export default function Admin() {
   const [activeSection, setActiveSection] = useState<NavSection>("leaderboard");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  const { user: currentUser, isLoading: userLoading } = useUser();
+
+  useEffect(() => {
+    console.log('[Admin] Current user:', currentUser);
+    console.log('[Admin] Discord ID:', currentUser?.discordUserId);
+    console.log('[Admin] Whitelisted IDs:', WHITELISTED_DISCORD_IDS);
+    
+    if (currentUser?.discordUserId && WHITELISTED_DISCORD_IDS.includes(currentUser.discordUserId)) {
+      console.log('[Admin] User is whitelisted, bypassing password');
+      setIsAuthenticated(true);
+    }
+  }, [currentUser]);
 
   const isProduction = import.meta.env.PROD;
 
+  if (isProduction) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-black">
+        <Card className="w-full max-w-md mx-4 p-8 shadow-xl bg-zinc-900 border-zinc-800 border-red-600/50">
+          <div className="flex flex-col items-center gap-6 text-center">
+            <div className="w-20 h-20 rounded-full bg-red-600/20 border border-red-600/30 flex items-center justify-center">
+              <Lock className="w-10 h-10 text-red-500" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white mb-3">
+                Admin Panel Disabled
+              </h1>
+              <div className="space-y-3 text-sm text-zinc-400">
+                <p className="font-semibold text-red-500">
+                  Security Notice: Admin access unavailable in production
+                </p>
+                <p>
+                  For security reasons, the admin panel is disabled in production builds. Admin functions require server-side authentication.
+                </p>
+                <p className="text-xs text-zinc-500 mt-4">
+                  If you need admin access, please use the development environment or implement proper server-side authentication.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <PasswordGate onAuthenticated={() => setIsAuthenticated(true)} />;
@@ -160,6 +207,7 @@ export default function Admin() {
     { id: "milestones" as NavSection, label: "Milestones", icon: Target, testId: "tab-milestones" },
     { id: "challenges" as NavSection, label: "Challenges", icon: Users, testId: "tab-challenges" },
     { id: "free-spins" as NavSection, label: "Free Spins", icon: Gift, testId: "tab-free-spins" },
+    { id: "giveaways" as NavSection, label: "Giveaways", icon: PartyPopper, testId: "tab-giveaways" },
     { id: "users" as NavSection, label: "Users & Points", icon: Coins, testId: "tab-users" },
     { id: "shop-items" as NavSection, label: "Shop Items", icon: ShoppingBag, testId: "tab-shop-items" },
     { id: "redemptions" as NavSection, label: "Redemption Center", icon: Package, testId: "tab-redemptions" },
@@ -222,6 +270,7 @@ export default function Admin() {
           {activeSection === "milestones" && <MilestonesAdmin />}
           {activeSection === "challenges" && <ChallengesAdmin />}
           {activeSection === "free-spins" && <FreeSpinsAdmin />}
+          {activeSection === "giveaways" && <GiveawaysAdmin />}
           {activeSection === "users" && <UsersAdmin />}
           {activeSection === "shop-items" && <ShopItemsAdmin />}
           {activeSection === "redemptions" && <RedemptionCenterAdmin />}
@@ -1730,6 +1779,317 @@ function FreeSpinsAdmin() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function GiveawaysAdmin() {
+  const { toast } = useToast();
+  const { data: giveaways } = useQuery<Giveaway[]>({
+    queryKey: ["/api/giveaways"],
+  });
+
+  const [newGiveaway, setNewGiveaway] = useState<InsertGiveaway>({
+    points: 1000,
+    durationMinutes: 60,
+    endTime: new Date(Date.now() + 60 * 60 * 1000),
+  });
+
+  const [customMinutes, setCustomMinutes] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+
+  const timePresets = [
+    { label: "1 min", minutes: 1 },
+    { label: "5 min", minutes: 5 },
+    { label: "15 min", minutes: 15 },
+    { label: "30 min", minutes: 30 },
+    { label: "1 hr", minutes: 60 },
+    { label: "4 hr", minutes: 240 },
+    { label: "12 hr", minutes: 720 },
+    { label: "24 hr", minutes: 1440 },
+    { label: "3 days", minutes: 4320 },
+    { label: "7 days", minutes: 10080 },
+  ];
+
+  const createMutation = useMutation({
+    mutationFn: (data: InsertGiveaway) => {
+      return apiRequest("POST", "/api/giveaways", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/giveaways"] });
+      toast({ title: "Giveaway created successfully" });
+      setNewGiveaway({
+        points: 1000,
+        durationMinutes: 60,
+        endTime: new Date(Date.now() + 60 * 60 * 1000),
+      });
+      setCustomMinutes("");
+      setShowCustom(false);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error creating giveaway", 
+        description: error?.message || "Failed to create giveaway",
+        variant: "destructive"
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/giveaways/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/giveaways"] });
+      toast({ title: "Giveaway deleted successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error deleting giveaway",
+        description: error?.message || "Failed to delete giveaway",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/giveaways/${id}/complete`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/giveaways"] });
+      toast({ title: "Giveaway completed and winner selected!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error completing giveaway",
+        description: error?.message || "Failed to complete giveaway",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const setDuration = (minutes: number) => {
+    setNewGiveaway({
+      ...newGiveaway,
+      durationMinutes: minutes,
+      endTime: new Date(Date.now() + minutes * 60 * 1000),
+    });
+  };
+
+  const handleCustomMinutes = () => {
+    const minutes = parseInt(customMinutes);
+    if (!isNaN(minutes) && minutes > 0) {
+      setDuration(minutes);
+      setShowCustom(false);
+    }
+  };
+
+  const activeGiveaways = giveaways?.filter(g => g.status === 'active') || [];
+  const completedGiveaways = giveaways?.filter(g => g.status === 'completed') || [];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-white">Giveaways Management</h2>
+      </div>
+
+      <Card className="p-6 bg-zinc-900 border-zinc-800">
+        <h3 className="text-lg font-semibold mb-6 text-white">Create New Giveaway</h3>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="points" className="text-sm font-medium text-zinc-300">Points to Giveaway</Label>
+            <Input
+              id="points"
+              type="number"
+              value={newGiveaway.points}
+              onChange={(e) => setNewGiveaway({ ...newGiveaway, points: parseInt(e.target.value) || 0 })}
+              data-testid="input-giveaway-points"
+              className="bg-zinc-800 border-zinc-700 text-white"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label className="text-sm font-medium text-zinc-300">Duration</Label>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {timePresets.map((preset) => (
+                <Button
+                  key={preset.minutes}
+                  type="button"
+                  variant={newGiveaway.durationMinutes === preset.minutes ? "default" : "outline"}
+                  onClick={() => setDuration(preset.minutes)}
+                  data-testid={`button-preset-${preset.minutes}`}
+                  className={newGiveaway.durationMinutes === preset.minutes 
+                    ? "bg-red-600 hover:bg-red-700 text-white border-red-600" 
+                    : "bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white"}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCustom(!showCustom)}
+              data-testid="button-custom-time"
+              className="w-full bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+            >
+              {showCustom ? "Hide Custom Time" : "Custom Time"}
+            </Button>
+            {showCustom && (
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  value={customMinutes}
+                  onChange={(e) => setCustomMinutes(e.target.value)}
+                  placeholder="Enter minutes"
+                  data-testid="input-custom-minutes"
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                />
+                <Button
+                  onClick={handleCustomMinutes}
+                  data-testid="button-set-custom"
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Set
+                </Button>
+              </div>
+            )}
+            <div className="text-sm text-zinc-400">
+              Selected: {newGiveaway.durationMinutes} minutes ({newGiveaway.durationMinutes < 60 
+                ? `${newGiveaway.durationMinutes}m`
+                : newGiveaway.durationMinutes < 1440
+                ? `${Math.floor(newGiveaway.durationMinutes / 60)}h ${newGiveaway.durationMinutes % 60}m`
+                : `${Math.floor(newGiveaway.durationMinutes / 1440)}d ${Math.floor((newGiveaway.durationMinutes % 1440) / 60)}h`})
+            </div>
+          </div>
+
+          <Button
+            onClick={() => createMutation.mutate(newGiveaway)}
+            disabled={createMutation.isPending || !newGiveaway.points || !newGiveaway.durationMinutes}
+            data-testid="button-create-giveaway"
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create Giveaway
+          </Button>
+        </div>
+      </Card>
+
+      <Card className="p-6 bg-zinc-900 border-zinc-800">
+        <h3 className="text-lg font-semibold mb-6 text-white flex items-center gap-2">
+          <Clock className="w-5 h-5 text-green-500" />
+          Active Giveaways
+        </h3>
+        <div className="space-y-3">
+          {activeGiveaways.map((giveaway) => {
+            const isExpired = new Date(giveaway.endTime) < new Date();
+            const timeLeft = new Date(giveaway.endTime).getTime() - new Date().getTime();
+            const minutesLeft = Math.floor(timeLeft / 60000);
+            
+            return (
+              <Card key={giveaway.id} className="p-4 bg-zinc-950 border-zinc-800 hover:border-zinc-700 transition-colors" data-testid={`giveaway-${giveaway.id}`}>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Badge className="bg-red-600/20 text-red-500 border-red-600/30">
+                        <Coins className="w-3 h-3 mr-1" />
+                        {giveaway.points.toLocaleString()} Points
+                      </Badge>
+                      <Badge className={isExpired ? "bg-amber-600/20 text-amber-500 border-amber-600/30" : "bg-green-600/20 text-green-500 border-green-600/30"}>
+                        {isExpired ? "Expired - Pending Completion" : "Active"}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-zinc-400">
+                      Duration: {giveaway.durationMinutes} minutes
+                    </div>
+                    <div className="text-sm text-zinc-400">
+                      {isExpired 
+                        ? `Ended ${new Date(giveaway.endTime).toLocaleString()}`
+                        : `Ends in ~${minutesLeft} minutes (${new Date(giveaway.endTime).toLocaleString()})`
+                      }
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {isExpired && (
+                      <Button
+                        size="sm"
+                        onClick={() => completeMutation.mutate(giveaway.id)}
+                        disabled={completeMutation.isPending}
+                        data-testid={`button-complete-${giveaway.id}`}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        Complete
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => deleteMutation.mutate(giveaway.id)}
+                      disabled={deleteMutation.isPending}
+                      data-testid={`button-delete-giveaway-${giveaway.id}`}
+                      className="hover:bg-red-600/20 text-red-500"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+          {activeGiveaways.length === 0 && (
+            <div className="text-center py-12 text-zinc-500">
+              <p>No active giveaways. Create one above!</p>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-6 bg-zinc-900 border-zinc-800">
+        <h3 className="text-lg font-semibold mb-6 text-white flex items-center gap-2">
+          <Trophy className="w-5 h-5 text-amber-500" />
+          Completed Giveaways
+        </h3>
+        <div className="space-y-3">
+          {completedGiveaways.slice(0, 10).map((giveaway) => (
+            <Card key={giveaway.id} className="p-4 bg-zinc-950 border-zinc-800" data-testid={`completed-${giveaway.id}`}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Badge className="bg-red-600/20 text-red-500 border-red-600/30">
+                      <Coins className="w-3 h-3 mr-1" />
+                      {giveaway.points.toLocaleString()} Points
+                    </Badge>
+                    <Badge className="bg-amber-600/20 text-amber-500 border-amber-600/30">
+                      Completed
+                    </Badge>
+                  </div>
+                  {giveaway.winnerUsername && (
+                    <div className="text-sm text-white font-semibold mb-1">
+                      Winner: {giveaway.winnerUsername}
+                    </div>
+                  )}
+                  <div className="text-xs text-zinc-500">
+                    Ended: {new Date(giveaway.endTime).toLocaleString()}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => deleteMutation.mutate(giveaway.id)}
+                  disabled={deleteMutation.isPending}
+                  data-testid={`button-delete-completed-${giveaway.id}`}
+                  className="hover:bg-red-600/20 text-red-500"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </Card>
+          ))}
+          {completedGiveaways.length === 0 && (
+            <div className="text-center py-12 text-zinc-500">
+              <p>No completed giveaways yet.</p>
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
