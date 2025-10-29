@@ -98,7 +98,7 @@ function KenoGamePage() {
           const tileNumber = data.drawnNumbers[currentIndex];
           setRevealedNumbers(prev => [...prev, tileNumber]);
           currentIndex++;
-          animationTimerRef.current = setTimeout(revealNext, 400);
+          animationTimerRef.current = setTimeout(revealNext, 100);
         } else {
           setTimeout(() => {
             const fullResult = {
