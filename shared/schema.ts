@@ -119,6 +119,7 @@ export const users = pgTable("users", {
   kickUserId: text("kick_user_id"),
   kickAccessToken: text("kick_access_token"),
   kickRefreshToken: text("kick_refresh_token"),
+  lastKickletSync: timestamp("last_kicklet_sync"),
   discordUsername: text("discord_username"),
   discordUserId: text("discord_user_id"),
   discordAccessToken: text("discord_access_token"),
