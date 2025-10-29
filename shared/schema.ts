@@ -283,3 +283,49 @@ export interface TournamentData {
   champion: string;
   lastUpdated: string;
 }
+
+// Giveaways
+export const giveaways = pgTable("giveaways", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  points: integer("points").notNull(),
+  durationMinutes: integer("duration_minutes").notNull(),
+  startTime: timestamp("start_time").defaultNow().notNull(),
+  endTime: timestamp("end_time").notNull(),
+  status: text("status").notNull().default("active"), // active, completed
+  winnerId: varchar("winner_id"),
+  winnerUsername: text("winner_username"),
+  winnerDiscordUsername: text("winner_discord_username"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertGiveawaySchema = createInsertSchema(giveaways).omit({
+  id: true,
+  createdAt: true,
+  startTime: true,
+  status: true,
+  winnerId: true,
+  winnerUsername: true,
+  winnerDiscordUsername: true,
+});
+
+export type InsertGiveaway = z.infer<typeof insertGiveawaySchema>;
+export type Giveaway = typeof giveaways.$inferSelect;
+
+// Giveaway Entries
+export const giveawayEntries = pgTable("giveaway_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  giveawayId: varchar("giveaway_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  username: text("username").notNull(),
+  discordUserId: text("discord_user_id"),
+  discordUsername: text("discord_username"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertGiveawayEntrySchema = createInsertSchema(giveawayEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertGiveawayEntry = z.infer<typeof insertGiveawayEntrySchema>;
+export type GiveawayEntry = typeof giveawayEntries.$inferSelect;
