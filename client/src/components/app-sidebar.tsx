@@ -1,5 +1,6 @@
-import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag, Bomb, Spade, TrendingUp, Swords, Grid3x3 } from "lucide-react";
+import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag, Bomb, Spade, TrendingUp, Swords, Grid3x3, Settings, PartyPopper, Sparkles } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useUser } from "@/contexts/UserContext";
 import {
   Sidebar,
   SidebarContent,
@@ -15,6 +16,8 @@ import {
 import { SiDiscord, SiX, SiInstagram, SiKick } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+
+const WHITELISTED_DISCORD_IDS = ['1356903329518583948', '1197661923718737961'];
 
 const mainMenuItems = [
   {
@@ -43,7 +46,12 @@ const communityMenuItems = [
   {
     title: "Free Spins",
     url: "/free-spins",
-    icon: Gift,
+    icon: Sparkles,
+  },
+  {
+    title: "Giveaways",
+    url: "/giveaways",
+    icon: PartyPopper,
   },
 ];
 
@@ -117,6 +125,13 @@ const socialLinks = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user: currentUser } = useUser();
+  
+  const isAdmin = currentUser?.discordUserId && WHITELISTED_DISCORD_IDS.includes(currentUser.discordUserId);
+  
+  console.log('[AppSidebar] Current user:', currentUser);
+  console.log('[AppSidebar] Discord ID:', currentUser?.discordUserId);
+  console.log('[AppSidebar] Is Admin:', isAdmin);
 
   return (
     <Sidebar className="border-r border-sidebar-border bg-gradient-to-b from-sidebar via-sidebar to-sidebar/95">
@@ -353,6 +368,40 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* ADMIN Section - Only for whitelisted Discord IDs */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs uppercase tracking-wider font-bold text-muted-foreground px-3 py-2 flex items-center gap-2">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-red-500/20 to-transparent" />
+              Admin
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-red-500/20 to-transparent" />
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1">
+                <SidebarMenuItem className="animate-slide-in" style={{ animationDelay: '0.4s' }}>
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={location === "/admin"}
+                    className={`group relative transition-all duration-300 ${
+                      location === "/admin" ? 'bg-gradient-to-r from-red-500/20 to-red-500/10 border-l-2 border-red-500 shadow-lg shadow-red-500/10' : ''
+                    }`}
+                  >
+                    <Link href="/admin" data-testid="link-admin">
+                      <Settings className={`w-4 h-4 transition-all duration-300 group-hover:scale-110 ${
+                        location === "/admin" ? 'text-red-500 animate-pulse-slow' : ''
+                      }`} />
+                      <span className={`transition-all duration-300 ${location === "/admin" ? 'font-semibold text-red-500' : ''}`}>Admin Panel</span>
+                      {location === "/admin" && (
+                        <div className="absolute inset-0 bg-red-500/5 rounded-md -z-10 animate-pulse-slow" />
+                      )}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4 bg-gradient-to-t from-sidebar-accent/30 to-transparent relative overflow-hidden">
