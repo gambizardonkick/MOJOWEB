@@ -20,9 +20,11 @@ import DiceGame from "@/pages/games/dice";
 import LimboGame from "@/pages/games/limbo";
 import MinesGame from "@/pages/games/mines";
 import BlackjackGame from "@/pages/games/blackjack";
+import KenoGame from "@/pages/games/keno";
 import NotFound from "@/pages/not-found";
 import { Menu, User as UserIcon, Coins } from "lucide-react";
 import { UserProvider, useUser } from "@/contexts/UserContext";
+import { WebSocketProvider } from "@/contexts/WebSocketContext";
 import { Button } from "@/components/ui/button";
 
 function Router() {
@@ -43,6 +45,7 @@ function Router() {
       <Route path="/games/limbo" component={LimboGame} />
       <Route path="/games/mines" component={MinesGame} />
       <Route path="/games/blackjack" component={BlackjackGame} />
+      <Route path="/games/keno" component={KenoGame} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -99,9 +102,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <UserProvider>
-        <LoadingScreen />
-        <TooltipProvider>
-          <SidebarProvider style={style as React.CSSProperties}>
+        <WebSocketProvider>
+          <LoadingScreen />
+          <TooltipProvider>
+            <SidebarProvider style={style as React.CSSProperties}>
             <div className="flex h-screen w-full">
               <AppSidebar />
               <div className="flex flex-col flex-1 overflow-hidden">
@@ -138,9 +142,10 @@ export default function App() {
                 </main>
               </div>
             </div>
-          </SidebarProvider>
-          <Toaster />
-        </TooltipProvider>
+            </SidebarProvider>
+            <Toaster />
+          </TooltipProvider>
+        </WebSocketProvider>
       </UserProvider>
     </QueryClientProvider>
   );
