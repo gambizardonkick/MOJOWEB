@@ -1,19 +1,21 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { Dices, ArrowUp, ArrowDown, Coins } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
+import { useWebSocket } from "@/contexts/WebSocketContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import type { GameHistory } from "@shared/schema";
 
 function DiceGamePage() {
   const { toast } = useToast();
   const { user } = useUser();
+  const { sendMessage, on, isConnected } = useWebSocket();
   const [betAmount, setBetAmount] = useState("100");
   const [targetNumber, setTargetNumber] = useState("50");
   const [direction, setDirection] = useState<"under" | "over">("over");
@@ -32,45 +34,34 @@ function DiceGamePage() {
     : ((100 - target) > 0 ? (100 / (100 - target)) * 0.99 : 0);
   const potentialPayout = Math.floor(parseInt(betAmount || "0") * multiplier);
 
-  const playMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", "/api/games/dice/play", {
-        userId: user?.id,
-        betAmount: parseInt(betAmount),
-        targetNumber: parseInt(targetNumber),
-        direction,
-      }) as Promise<any>;
-    },
-    onSuccess: (data: any) => {
-      console.log('Raw API response:', data);
-      const currentBetDirection = direction;
-      const currentBetTarget = targetNumber;
-      
-      const enrichedData = {
-        ...data,
-        betDirection: currentBetDirection,
-        betTarget: currentBetTarget,
-      };
-      
-      console.log('Enriched data:', enrichedData);
+  useEffect(() => {
+    const unsubscribeResult = on('dice:result', (data: any) => {
+      console.log('Dice result received:', data);
       
       setIsRolling(true);
       setTimeout(() => {
-        console.log('Setting lastResult to:', enrichedData);
-        setLastResult(enrichedData);
+        setLastResult(data);
         setIsRolling(false);
         queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
         queryClient.invalidateQueries({ queryKey: ["/api/games/history", user?.id] });
       }, 1000);
-    },
-    onError: (error: any) => {
+    });
+
+    const unsubscribeError = on('error', (data: any) => {
+      console.error('Dice error:', data);
+      setIsRolling(false);
       toast({
         title: "Error",
-        description: error.message || "Failed to play game",
+        description: data.error || "Failed to play game",
         variant: "destructive",
       });
-    },
-  });
+    });
+
+    return () => {
+      unsubscribeResult();
+      unsubscribeError();
+    };
+  }, [on, toast, user?.id]);
 
   const handlePlay = () => {
     const bet = parseInt(betAmount);
@@ -103,7 +94,21 @@ function DiceGamePage() {
       return;
     }
     
-    playMutation.mutate();
+    if (!isConnected) {
+      toast({
+        title: "Connection Error",
+        description: "Not connected to server. Please wait...",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsRolling(true);
+    sendMessage('dice:play', {
+      betAmount: bet,
+      targetNumber: target,
+      direction,
+    });
   };
 
   if (!user) {
@@ -235,14 +240,18 @@ function DiceGamePage() {
 
               <Button
                 onClick={handlePlay}
-                disabled={playMutation.isPending || isRolling}
+                disabled={!isConnected || isRolling}
                 className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:opacity-90 text-white border-0 h-12 text-base font-bold"
                 data-testid="button-play"
               >
-                {playMutation.isPending || isRolling ? (
+                {isRolling ? (
                   <>
                     <Dices className="w-5 h-5 mr-2 animate-spin" />
                     Rolling...
+                  </>
+                ) : !isConnected ? (
+                  <>
+                    Connecting...
                   </>
                 ) : (
                   <>
@@ -259,17 +268,24 @@ function DiceGamePage() {
             
             {isRolling ? (
               <div className="text-center py-12">
-                <Dices className="w-16 h-16 text-red-600 mx-auto mb-4 animate-spin" />
+                <div className="relative w-32 h-32 mx-auto mb-4">
+                  <div className="absolute inset-0 animate-spin">
+                    <div className="hexagon-dice bg-gradient-to-br from-zinc-700 to-zinc-800 border-4 border-zinc-600">
+                      <Dices className="w-12 h-12 text-zinc-400" />
+                    </div>
+                  </div>
+                </div>
                 <p className="text-zinc-400 animate-pulse">Rolling the dice...</p>
               </div>
             ) : lastResult && typeof lastResult.roll === 'number' ? (
               <div className="space-y-4 mb-6">
-                <div className="text-center py-6 bg-zinc-800/30 rounded-lg">
-                  <p className="text-sm text-zinc-400 mb-2">Roll Result</p>
-                  <p className={`text-6xl font-black ${lastResult.won ? 'text-green-400' : 'text-red-400'}`} data-testid="text-result">
-                    {lastResult.roll.toFixed(2)}
-                  </p>
-                  <p className="text-sm text-zinc-500 mt-2">
+                <div className="text-center py-6">
+                  <div className={`hexagon-dice mx-auto ${lastResult.won ? 'bg-gradient-to-br from-green-600 to-emerald-600 border-4 border-green-500 shadow-lg shadow-green-500/50' : 'bg-gradient-to-br from-red-600 to-rose-600 border-4 border-red-500 shadow-lg shadow-red-500/50'} animate-bounce-in`}>
+                    <div className={`text-3xl font-black ${lastResult.won ? 'text-white' : 'text-white'}`} data-testid="text-result">
+                      {lastResult.roll.toFixed(2)}
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-400 mt-4">
                     Target: {(lastResult.betDirection || direction) === "under" ? "Under" : "Over"} {lastResult.betTarget || targetNumber}
                   </p>
                 </div>
