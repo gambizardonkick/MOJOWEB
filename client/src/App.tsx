@@ -11,6 +11,7 @@ import Leaderboard from "@/pages/leaderboard";
 import Milestones from "@/pages/milestones";
 import Challenges from "@/pages/challenges";
 import FreeSpins from "@/pages/free-spins";
+import Giveaways from "@/pages/giveaways";
 import Referral from "@/pages/referral";
 import Admin from "@/pages/admin";
 import Dashboard from "@/pages/dashboard";
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/milestones" component={Milestones} />
       <Route path="/challenges" component={Challenges} />
       <Route path="/free-spins" component={FreeSpins} />
+      <Route path="/giveaways" component={Giveaways} />
       <Route path="/referral" component={Referral} />
       <Route path="/admin" component={Admin} />
       <Route path="/tournament" component={Tournament} />
