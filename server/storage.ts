@@ -21,6 +21,10 @@ import {
   type ActiveBlackjackGame,
   type AdminLog,
   type InsertAdminLog,
+  type Giveaway,
+  type InsertGiveaway,
+  type GiveawayEntry,
+  type InsertGiveawayEntry,
 } from "@shared/schema";
 import { getDb } from "./firebase";
 import { getKickletService } from "./kicklet";
@@ -96,6 +100,17 @@ export interface IStorage {
 
   getAdminLogs(): Promise<AdminLog[]>;
   createAdminLog(log: InsertAdminLog): Promise<AdminLog>;
+
+  getGiveaways(status?: string): Promise<Giveaway[]>;
+  getGiveaway(id: string): Promise<Giveaway | undefined>;
+  createGiveaway(giveaway: InsertGiveaway): Promise<Giveaway>;
+  updateGiveaway(id: string, data: Partial<Giveaway>): Promise<Giveaway>;
+  deleteGiveaway(id: string): Promise<void>;
+  completeGiveaway(id: string, winnerId: string, winnerUsername: string, winnerDiscordUsername: string | null): Promise<Giveaway>;
+  
+  getGiveawayEntries(giveawayId: string): Promise<GiveawayEntry[]>;
+  createGiveawayEntry(entry: InsertGiveawayEntry): Promise<GiveawayEntry>;
+  getUserGiveawayEntry(giveawayId: string, userId: string): Promise<GiveawayEntry | undefined>;
 
   storeKickVerifier(sessionId: string, codeVerifier: string): Promise<void>;
   getKickVerifier(sessionId: string): Promise<string | undefined>;
@@ -898,6 +913,107 @@ export class FirebaseStorage implements IStorage {
     });
     const snapshot = await newRef.get();
     return { id: snapshot.key!, ...snapshot.val() } as AdminLog;
+  }
+
+  async getGiveaways(status?: string): Promise<Giveaway[]> {
+    const snapshot = await this.db.ref('giveaways').get();
+    if (!snapshot.exists()) return [];
+    
+    const giveaways: Giveaway[] = [];
+    snapshot.forEach((child) => {
+      const giveaway = { id: child.key!, ...child.val() } as Giveaway;
+      if (!status || giveaway.status === status) {
+        giveaways.push(giveaway);
+      }
+    });
+    
+    return giveaways.sort((a, b) => {
+      const dateA = new Date(a.startTime || 0).getTime();
+      const dateB = new Date(b.startTime || 0).getTime();
+      return dateB - dateA;
+    });
+  }
+
+  async getGiveaway(id: string): Promise<Giveaway | undefined> {
+    const snapshot = await this.db.ref(`giveaways/${id}`).get();
+    if (!snapshot.exists()) return undefined;
+    return { id: snapshot.key!, ...snapshot.val() } as Giveaway;
+  }
+
+  async createGiveaway(giveaway: InsertGiveaway): Promise<Giveaway> {
+    const newRef = this.db.ref('giveaways').push();
+    const startTime = new Date();
+    const endTime = new Date(startTime.getTime() + giveaway.durationMinutes * 60000);
+    
+    await newRef.set({
+      ...giveaway,
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      status: 'active',
+      createdAt: startTime.toISOString(),
+    });
+    const snapshot = await newRef.get();
+    return { id: snapshot.key!, ...snapshot.val() } as Giveaway;
+  }
+
+  async updateGiveaway(id: string, data: Partial<Giveaway>): Promise<Giveaway> {
+    await this.db.ref(`giveaways/${id}`).update(data);
+    const snapshot = await this.db.ref(`giveaways/${id}`).get();
+    return { id: snapshot.key!, ...snapshot.val() } as Giveaway;
+  }
+
+  async deleteGiveaway(id: string): Promise<void> {
+    await this.db.ref(`giveaways/${id}`).remove();
+    await this.db.ref(`giveawayEntries/${id}`).remove();
+  }
+
+  async completeGiveaway(id: string, winnerId: string, winnerUsername: string, winnerDiscordUsername: string | null): Promise<Giveaway> {
+    await this.db.ref(`giveaways/${id}`).update({
+      status: 'completed',
+      winnerId,
+      winnerUsername,
+      winnerDiscordUsername,
+    });
+    const snapshot = await this.db.ref(`giveaways/${id}`).get();
+    return { id: snapshot.key!, ...snapshot.val() } as Giveaway;
+  }
+
+  async getGiveawayEntries(giveawayId: string): Promise<GiveawayEntry[]> {
+    const snapshot = await this.db.ref(`giveawayEntries/${giveawayId}`).get();
+    if (!snapshot.exists()) return [];
+    
+    const entries: GiveawayEntry[] = [];
+    snapshot.forEach((child) => {
+      entries.push({ id: child.key!, ...child.val() } as GiveawayEntry);
+    });
+    
+    return entries;
+  }
+
+  async createGiveawayEntry(entry: InsertGiveawayEntry): Promise<GiveawayEntry> {
+    const newRef = this.db.ref(`giveawayEntries/${entry.giveawayId}`).push();
+    await newRef.set({
+      ...entry,
+      createdAt: new Date().toISOString(),
+    });
+    const snapshot = await newRef.get();
+    return { id: snapshot.key!, ...snapshot.val() } as GiveawayEntry;
+  }
+
+  async getUserGiveawayEntry(giveawayId: string, userId: string): Promise<GiveawayEntry | undefined> {
+    const snapshot = await this.db.ref(`giveawayEntries/${giveawayId}`).get();
+    if (!snapshot.exists()) return undefined;
+    
+    let userEntry: GiveawayEntry | undefined;
+    snapshot.forEach((child) => {
+      const entry = { id: child.key!, ...child.val() } as GiveawayEntry;
+      if (entry.userId === userId) {
+        userEntry = entry;
+        return true;
+      }
+    });
+    
+    return userEntry;
   }
 
   async storeKickVerifier(sessionId: string, codeVerifier: string): Promise<void> {
