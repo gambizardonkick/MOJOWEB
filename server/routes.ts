@@ -1765,21 +1765,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const hits = selectedNumbers.filter(num => drawnNumbers.includes(num)).length;
       
-      const payoutTable: Record<string, Record<number, number>> = {
-        low: { 0: 0, 1: 0, 2: 1, 3: 2, 4: 4, 5: 8, 6: 12, 7: 20, 8: 40, 9: 80, 10: 150 },
-        medium: { 0: 0, 1: 0, 2: 0, 3: 1, 4: 3, 5: 6, 6: 15, 7: 35, 8: 75, 9: 150, 10: 300 },
-        high: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 2, 5: 5, 6: 20, 7: 50, 8: 120, 9: 250, 10: 500 },
+      const payoutTables: Record<string, Record<number, number[]>> = {
+        low: {
+          1: [0.70, 1.85],
+          2: [0.00, 2.00, 3.80],
+          3: [0.00, 1.10, 1.38, 26.00],
+          4: [0.00, 0.00, 2.20, 7.90, 90.00],
+          5: [0.00, 0.00, 1.50, 4.20, 13.00, 300.0],
+          6: [0.00, 0.00, 1.10, 2.00, 6.20, 100.0, 700.0],
+          7: [0.00, 0.00, 1.10, 1.60, 3.50, 15.00, 225.0, 700.0],
+          8: [0.00, 0.00, 1.10, 1.50, 2.00, 5.50, 39.00, 100.0, 800.0],
+          9: [0.00, 0.00, 1.10, 1.30, 1.70, 2.50, 7.50, 50.00, 250.0, 1000],
+          10: [0.00, 0.00, 1.10, 1.20, 1.30, 1.80, 3.50, 13.00, 50.00, 250.0, 1000],
+        },
+        medium: {
+          1: [0.70, 1.85],
+          2: [0.00, 2.00, 3.80],
+          3: [0.00, 1.10, 1.38, 26.00],
+          4: [0.00, 0.00, 2.20, 7.90, 90.00],
+          5: [0.00, 0.00, 1.50, 4.20, 13.00, 300.0],
+          6: [0.00, 0.00, 1.10, 2.00, 6.20, 100.0, 700.0],
+          7: [0.00, 0.00, 1.10, 1.60, 3.50, 15.00, 225.0, 700.0],
+          8: [0.00, 0.00, 1.10, 1.50, 2.00, 5.50, 39.00, 100.0, 800.0],
+          9: [0.00, 0.00, 1.10, 1.30, 1.70, 2.50, 7.50, 50.00, 250.0, 1000],
+          10: [0.00, 0.00, 1.10, 1.20, 1.30, 1.80, 3.50, 13.00, 50.00, 250.0, 1000],
+        },
+        high: {
+          1: [0.00, 3.96],
+          2: [0.00, 0.00, 17.10],
+          3: [0.00, 0.00, 0.00, 81.50],
+          4: [0.00, 0.00, 0.00, 10.00, 259.0],
+          5: [0.00, 0.00, 0.00, 4.50, 48.00, 450.0],
+          6: [0.00, 0.00, 0.00, 0.00, 11.00, 350.0, 710.0],
+          7: [0.00, 0.00, 0.00, 0.00, 7.00, 90.00, 400.0, 800.0],
+          8: [0.00, 0.00, 0.00, 0.00, 5.00, 20.00, 270.0, 600.0, 900.0],
+          9: [0.00, 0.00, 0.00, 0.00, 4.00, 11.00, 56.00, 500.0, 800.0, 1000],
+          10: [0.00, 0.00, 0.00, 0.00, 3.50, 8.00, 13.00, 63.00, 500.0, 800.0, 1000],
+        },
       };
       
-      const multiplier = payoutTable[risk][Math.min(hits, selectedNumbers.length)] || 0;
+      const tilesSelected = selectedNumbers.length;
+      const multiplierArray = payoutTables[risk][tilesSelected] || [];
+      const multiplier = multiplierArray[hits] || 0;
       const payout = Math.floor(betAmount * multiplier);
-      const won = payout > 0;
+      const won = payout > betAmount;
       
       if (payout > 0) {
         await storage.addPoints(userId, payout);
       }
       
-      const gameData = JSON.stringify({ selectedNumbers, drawnNumbers, hits, risk, multiplier });
+      const gameData = JSON.stringify({ selectedNumbers, drawnNumbers, hits, risk, multiplier, tilesSelected });
       await storage.createGameHistory({
         userId,
         gameName: 'keno',
