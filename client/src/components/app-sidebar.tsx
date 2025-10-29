@@ -1,4 +1,4 @@
-import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag, Bomb, Spade, TrendingUp, Swords } from "lucide-react";
+import { Trophy, Award, Target, Gift, Users, ExternalLink, HelpCircle, Dices, User, ShoppingBag, Bomb, Spade, TrendingUp, Swords, Grid3x3 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -80,6 +80,11 @@ const gameMenuItems = [
     title: "Blackjack",
     url: "/games/blackjack",
     icon: Spade,
+  },
+  {
+    title: "Keno",
+    url: "/games/keno",
+    icon: Grid3x3,
   },
 ];
 
