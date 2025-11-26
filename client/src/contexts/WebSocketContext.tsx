@@ -25,8 +25,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   const connect = useCallback(() => {
     if (!user?.id) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // Construct WebSocket URL by replacing http:// with ws:// or https:// with wss://
+    const baseUrl = window.location.origin;
+    const wsUrl = baseUrl.replace(/^https?:\/\//, (match) => {
+      return match === 'https://' ? 'wss://' : 'ws://';
+    }) + '/ws';
 
     console.log('Connecting to WebSocket:', wsUrl);
 
