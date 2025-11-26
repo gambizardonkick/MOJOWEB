@@ -579,7 +579,7 @@ export class FirebaseStorage implements IStorage {
           user.lastKickletSync = new Date().toISOString() as any;
         }
       } catch (error) {
-        console.error(`Error syncing Kicklet points for user ${userId}:`, error);
+        console.warn(`Warning: Could not sync Kicklet points for user ${userId}, will retry on next sync`, error instanceof Error ? error.message : 'Unknown error');
       }
     }
     
@@ -602,47 +602,51 @@ export class FirebaseStorage implements IStorage {
 
       console.log(`Syncing points for ${kickUsers.length} Kick users from Kicklet...`);
       
-      const kicklet = getKickletService();
-      const allViewers = await kicklet.getAllViewers(channelId);
-      
-      if (allViewers.length === 0) {
-        console.log('No viewers found in Kicklet');
-        return;
-      }
-
-      console.log(`Fetched ${allViewers.length} viewers from Kicklet in single request`);
-      
-      const viewerMap = new Map(
-        allViewers.map(v => [v.viewerKickUsername.toLowerCase(), v.points])
-      );
-
-      let updatedCount = 0;
-      const updatePromises = kickUsers.map(async (user) => {
-        try {
-          const kickletPoints = viewerMap.get(user.kickUsername!.toLowerCase());
-          
-          if (kickletPoints === undefined) {
-            console.log(`  User ${user.kickUsername} not found in Kicklet, skipping`);
-            return;
-          }
-          
-          if (user.points !== kickletPoints) {
-            console.log(`  User ${user.kickUsername}: ${user.points} -> ${kickletPoints}`);
-            await this.db.ref(`users/${user.id}`).update({ 
-              points: kickletPoints,
-              lastKickletSync: new Date().toISOString(),
-            });
-            updatedCount++;
-          }
-        } catch (error) {
-          console.error(`  Error syncing points for ${user.kickUsername}:`, error);
+      try {
+        const kicklet = getKickletService();
+        const allViewers = await kicklet.getAllViewers(channelId);
+        
+        if (allViewers.length === 0) {
+          console.log('No viewers found in Kicklet');
+          return;
         }
-      });
 
-      await Promise.all(updatePromises);
-      console.log(`Kicklet sync completed - ${updatedCount} users updated`);
+        console.log(`Fetched ${allViewers.length} viewers from Kicklet in single request`);
+        
+        const viewerMap = new Map(
+          allViewers.map(v => [v.viewerKickUsername.toLowerCase(), v.points])
+        );
+
+        let updatedCount = 0;
+        const updatePromises = kickUsers.map(async (user) => {
+          try {
+            const kickletPoints = viewerMap.get(user.kickUsername!.toLowerCase());
+            
+            if (kickletPoints === undefined) {
+              console.log(`  User ${user.kickUsername} not found in Kicklet, skipping`);
+              return;
+            }
+            
+            if (user.points !== kickletPoints) {
+              console.log(`  User ${user.kickUsername}: ${user.points} -> ${kickletPoints}`);
+              await this.db.ref(`users/${user.id}`).update({ 
+                points: kickletPoints,
+                lastKickletSync: new Date().toISOString(),
+              });
+              updatedCount++;
+            }
+          } catch (error) {
+            console.warn(`  Warning: Could not sync points for ${user.kickUsername}:`, error instanceof Error ? error.message : 'Unknown error');
+          }
+        });
+
+        await Promise.all(updatePromises);
+        console.log(`Kicklet sync completed - ${updatedCount} users updated`);
+      } catch (error) {
+        console.warn(`Kicklet API request failed, will retry on next sync (${error instanceof Error ? error.message : 'Unknown error'})`);
+      }
     } catch (error) {
-      console.error('Error in syncAllUsersFromKicklet:', error);
+      console.warn('Unexpected error in syncAllUsersFromKicklet, will retry on next sync:', error instanceof Error ? error.message : 'Unknown error');
     }
   }
 
