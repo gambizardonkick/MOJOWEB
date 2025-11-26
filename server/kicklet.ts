@@ -22,31 +22,48 @@ export class KickletService {
     this.apiToken = apiToken;
   }
 
-  private async makeRequest(endpoint: string, options: RequestInit = {}) {
+  private async makeRequest(endpoint: string, options: RequestInit = {}, retryCount: number = 0): Promise<Response> {
     const url = `${KICKLET_API_BASE}${endpoint}`;
     const token = this.apiToken.trim();
+    const maxRetries = 3;
     
-    console.log(`Making Kicklet API request to: ${url}`);
-    console.log(`Token length: ${token.length}, First 10 chars: ${token.substring(0, 10)}...`);
+    console.log(`Making Kicklet API request to: ${url}${retryCount > 0 ? ` (retry ${retryCount}/${maxRetries})` : ''}`);
     
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Authorization': `apitoken ${token}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `apitoken ${token}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          ...options.headers,
+        },
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Kicklet API error (${response.status}):`, errorText);
-      console.error(`Request URL: ${url}`);
-      console.error(`Token info: length=${token.length}, starts with=${token.substring(0, 10)}`);
-      throw new Error(`Kicklet API request failed: ${response.status}`);
+      if (!response.ok) {
+        if (response.status === 403 && retryCount < maxRetries) {
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.warn(`Kicklet API returned 403, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.makeRequest(endpoint, options, retryCount + 1);
+        }
+        
+        const errorText = await response.text();
+        console.error(`Kicklet API error (${response.status}):`, errorText.substring(0, 200));
+        throw new Error(`Kicklet API request failed: ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      if (retryCount < maxRetries) {
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.warn(`Kicklet API request failed, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries}):`, error);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.makeRequest(endpoint, options, retryCount + 1);
+      }
+      throw error;
     }
-
-    return response;
   }
 
   async getViewerPoints(kickId: string, kickUsername: string): Promise<number> {
